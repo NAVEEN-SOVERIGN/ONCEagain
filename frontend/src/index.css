@@ -1,0 +1,426 @@
+/* ============================================================
+   CLINICAL WORKSTATION DESIGN SYSTEM — OSTEOARTHRITIS SCREENING
+   Offline-First Medical Design System (Zero External CDNs)
+   ============================================================ */
+
+:root {
+  /* Typography Stacks (Offline System Fallbacks) */
+  --font-sans: Inter, 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+
+  /* Surfaces & Backgrounds */
+  --bg-app: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f1f5f9;
+  --bg-muted: #e2e8f0;
+
+  /* Text Contrast Hierarchy */
+  --text-primary: #0f172a;
+  --text-body: #334155;
+  --text-secondary: #64748b;
+  --text-faint: #94a3b8;
+  --text-on-accent: #ffffff;
+
+  /* Restrained Medical Borders */
+  --border-default: #e2e8f0;
+  --border-medium: #cbd5e1;
+  --border-dark: #94a3b8;
+
+  /* Primary Clinical Accents */
+  --accent-primary: #0f766e;
+  --accent-primary-hover: #115e59;
+  --accent-primary-subtle: #f0fdfa;
+  --accent-secondary: #0284c7;
+  --accent-secondary-hover: #0369a1;
+  --accent-secondary-subtle: #f0f9ff;
+  --focus-ring: rgba(2, 132, 199, 0.25);
+
+  /* Clinically Meaningful Risk Stratification Colors */
+  --tier1-text: #15803d;
+  --tier1-bg: #f0fdf4;
+  --tier1-border: #bbf7d0;
+
+  --tier2-text: #b45309;
+  --tier2-bg: #fffbeb;
+  --tier2-border: #fde68a;
+
+  --tier3-text: #b91c1c;
+  --tier3-bg: #fef2f2;
+  --tier3-border: #fecaca;
+
+  --redflag-text: #991b1b;
+  --redflag-bg: #fef2f2;
+  --redflag-border: #dc2626;
+
+  /* Spacing Grid (4/8/16/20/24/32px) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 20px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
+  /* Flat Shapes (6-8px Max) */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Restrained Shadows */
+  --shadow-subtle: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-panel: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.05);
+}
+
+/* Base Reset */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background-color: var(--bg-app);
+  color: var(--text-body);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* Typography Hierarchy */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+h1 { font-size: 24px; }
+h2 { font-size: 20px; }
+h3 { font-size: 16px; }
+h4 { font-size: 14px; font-weight: 600; }
+
+p {
+  color: var(--text-body);
+}
+
+/* Clean Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-subtle);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-medium);
+  border-radius: var(--radius-sm);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Layout Utilities */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--bg-app);
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.page-wrapper {
+  padding: var(--space-xl);
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Clinical Panel / Section Container */
+.clinical-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-subtle);
+}
+
+.clinical-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-default);
+}
+
+/* Clinical Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: 7px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-decoration: none;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  line-height: 1.25;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.btn-primary {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+  border-color: var(--accent-primary);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-primary-hover);
+  border-color: var(--accent-primary-hover);
+}
+
+.btn-secondary {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-subtle);
+  border-color: var(--border-dark);
+}
+
+.btn-danger {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #dc2626;
+}
+
+.btn-compact {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Form Controls */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--space-md);
+}
+
+.form-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.form-label .required {
+  color: #b91c1c;
+  margin-left: 2px;
+}
+
+.form-helper {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.form-input, .form-select, .form-textarea {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 13.5px;
+  font-family: inherit;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+  outline: none;
+  width: 100%;
+}
+
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: var(--accent-secondary);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.form-input::placeholder, .form-textarea::placeholder {
+  color: var(--text-faint);
+}
+
+/* Clinical Table */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.clinical-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+.clinical-table th {
+  background: var(--bg-subtle);
+  padding: 10px 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border-medium);
+}
+
+.clinical-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border-default);
+  color: var(--text-body);
+  vertical-align: middle;
+}
+
+.clinical-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.clinical-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+/* Clinical Status and Risk Badges (Restrained) */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.badge-tier1 {
+  background: var(--tier1-bg);
+  color: var(--tier1-text);
+  border: 1px solid var(--tier1-border);
+}
+
+.badge-tier2 {
+  background: var(--tier2-bg);
+  color: var(--tier2-text);
+  border: 1px solid var(--tier2-border);
+}
+
+.badge-tier3 {
+  background: var(--tier3-bg);
+  color: var(--tier3-text);
+  border: 1px solid var(--tier3-border);
+}
+
+.badge-redflag {
+  background: var(--redflag-bg);
+  color: var(--redflag-text);
+  border: 1px solid var(--redflag-border);
+  font-weight: 600;
+}
+
+.badge-neutral {
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+
+.badge-active {
+  background: var(--accent-secondary-subtle);
+  color: var(--accent-secondary);
+  border: 1px solid #bae6fd;
+}
+
+/* Modal Dialog */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: var(--space-md);
+}
+
+.modal-content {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  max-width: 640px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15);
+  padding: var(--space-xl);
+}
+
+/* Print Styles for Clinical Reports */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt;
+  }
+  .app-container {
+    display: block !important;
+  }
+  .sidebar,
+  header,
+  .no-print,
+  button:not(.print-allow) {
+    display: none !important;
+  }
+  .main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .page-wrapper {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .clinical-card {
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+    margin-bottom: 12pt;
+  }
+  .print-only {
+    display: block !important;
+  }
+}
