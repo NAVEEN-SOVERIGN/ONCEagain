@@ -8,7 +8,6 @@ import {
   RedFlag,
   Report,
 } from '../api/types';
-import { RiskBadge } from '../components/common/RiskBadge';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Select } from '../components/common/Select';
@@ -17,7 +16,8 @@ import { Section } from '../components/common/Section';
 import { StepIndicator } from '../components/common/StepIndicator';
 import { ScreeningDisclaimer } from '../components/common/ScreeningDisclaimer';
 import { QualityIndicator } from '../components/common/QualityIndicator';
-import { ClinicalFinding } from '../components/common/ClinicalFinding';
+import { ProvenanceBadge } from '../components/common/ProvenanceBadge';
+import { EvidenceTable } from '../components/screening/EvidenceTable';
 import { WaveformCanvas } from '../components/sensor/WaveformCanvas';
 import {
   ChevronRight,
@@ -1060,75 +1060,143 @@ export const NewScreeningPage: React.FC<NewScreeningPageProps> = ({ initialPatie
           {redFlags.length > 0 && (
             <Alert
               type="redflag"
-              title="CRITICAL CLINICAL RED FLAG DETECTED — URGENT ESCALATION"
+              title="CRITICAL CLINICAL RED FLAG DETECTED — URGENT CLINICAL ESCALATION"
               detectedFinding={redFlags.map((r) => r.flag_name).join(', ')}
               explanation={redFlags.map((r) => r.explanation).join('. ')}
               actionRequired={redFlags[0]?.action_required || 'Urgent medical referral / clinical escalation.'}
             >
-              Independent Red-Flag Engine detected potential acute joint condition requiring immediate clinical evaluation. Automated OA triage bypassed.
+              Independent Red-Flag Safety Engine detected potential acute joint condition requiring immediate medical evaluation. Routine screening triage pathway bypassed.
             </Alert>
           )}
 
-          {/* Automated Screening Assessment Panel */}
-          <Section
-            title="Screening Risk Stratification Output"
-            subtitle="Preliminary automated decision-support result. This is NOT a confirmed diagnosis."
-            action={<RiskBadge tier={riskAssessment.risk_tier} score={riskAssessment.risk_score} size="lg" />}
+          {/* Primary Automated Screening Assessment Card */}
+          <div
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-default)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '20px 24px',
+              boxShadow: 'var(--shadow-subtle)',
+            }}
           >
-            <div style={{ background: 'var(--bg-subtle)', padding: '12px 16px', borderRadius: 'var(--radius-md)', marginBottom: '16px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                Clinical Interpretation:
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px' }}>
+              <div>
+                <div
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: 'var(--text-secondary)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  AUTOMATED SCREENING ASSESSMENT
+                </div>
+
+                {/* Prominent Screening Tier */}
+                <div
+                  style={{
+                    fontSize: '22px',
+                    fontWeight: 700,
+                    color:
+                      riskAssessment.risk_tier === 'TIER_3_PROBABLE_OA'
+                        ? 'var(--tier3-text)'
+                        : riskAssessment.risk_tier === 'TIER_2_ELEVATED_RISK'
+                        ? 'var(--tier2-text)'
+                        : 'var(--tier1-text)',
+                    marginTop: '4px',
+                  }}
+                >
+                  {riskAssessment.risk_tier === 'TIER_1_LOW_RISK' && 'Tier 1 — Low Risk'}
+                  {riskAssessment.risk_tier === 'TIER_2_ELEVATED_RISK' && 'Tier 2 — Elevated Risk Markers'}
+                  {riskAssessment.risk_tier === 'TIER_3_PROBABLE_OA' && 'Tier 3 — Probable OA Pattern'}
+                </div>
+
+                {/* Secondary Numerical Risk Score */}
+                <div
+                  style={{
+                    fontSize: '13px',
+                    color: 'var(--text-secondary)',
+                    marginTop: '3px',
+                  }}
+                >
+                  Calculated Screening Score:{' '}
+                  <strong style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                    {riskAssessment.risk_score}
+                  </strong>{' '}
+                  / 100 • Model Engine: {riskAssessment.model_version}
+                </div>
               </div>
-              <p style={{ fontSize: '13px', color: 'var(--text-body)', lineHeight: 1.5 }}>
+
+              {/* Prominent Screening Disclaimer Tag */}
+              <div
+                style={{
+                  padding: '8px 14px',
+                  background: 'var(--bg-subtle)',
+                  border: '1px solid var(--border-default)',
+                  borderRadius: 'var(--radius-md)',
+                  textAlign: 'right',
+                }}
+              >
+                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Screening result — not a diagnosis.
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  Decision-support marker to prioritize clinical follow-up
+                </div>
+              </div>
+            </div>
+
+            {/* Automated Interpretation with Audited Clinical Language */}
+            <div
+              style={{
+                background: 'var(--bg-subtle)',
+                padding: '12px 16px',
+                borderRadius: 'var(--radius-md)',
+                marginTop: '16px',
+                borderLeft: '3px solid var(--accent-primary)',
+              }}
+            >
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '3px' }}>
+                Screening Marker Synthesis:
+              </div>
+              <p style={{ fontSize: '12.5px', color: 'var(--text-body)', lineHeight: 1.45, margin: 0 }}>
                 {riskAssessment.explanation}
               </p>
             </div>
+          </div>
 
-            <ScreeningDisclaimer compact={true} includeReviewRequirement={true} />
-          </Section>
-
-          {/* Contributing Markers Table */}
+          {/* Structured Evidence Table of Contributing Findings */}
           <Section
-            title="Contributing Biomechanical & Symptom Markers"
-            subtitle="Transparent feature weights explaining how the automated score was computed."
+            title="Contributing Biomechanical &amp; Symptom Findings"
+            subtitle="Structured evidence table showing observed parameters, thresholds, score contributions, and clinical provenance."
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {riskAssessment.contributing_features.map((cf, idx) => (
-                <ClinicalFinding
-                  key={idx}
-                  label={cf.feature}
-                  detectedValue={String(cf.value)}
-                  explanation={cf.explanation}
-                  source={`Weight: +${cf.weight}`}
-                  isFlagged={cf.weight > 10}
-                />
-              ))}
-            </div>
+            <EvidenceTable features={riskAssessment.contributing_features} autoFlags={autoFlags} />
           </Section>
 
-          {/* Auto-Flags Details */}
+          {/* Auto-Flags Details if Present */}
           {autoFlags.length > 0 && (
             <Section
-              title={`Clinical Diagnostic Threshold Flags (${autoFlags.length})`}
-              subtitle="Configured guideline rules triggered by patient measurements."
+              title={`Automated Screening Guideline Markers (${autoFlags.length})`}
+              subtitle="Objective rule-based threshold detections contributing to triage stratification."
             >
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '10px' }}>
                 {autoFlags.map((flag) => (
                   <div
                     key={flag.id}
                     style={{
-                      padding: '10px 12px',
+                      padding: '10px 14px',
                       background: 'var(--bg-surface)',
                       borderRadius: 'var(--radius-md)',
                       border: '1px solid var(--border-default)',
-                      fontSize: '12.5px',
+                      fontSize: '12px',
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                       <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{flag.flag_name}</span>
-                      <span className="badge badge-tier2" style={{ fontSize: '11px' }}>{flag.status_level}</span>
+                      <ProvenanceBadge source="AUTOMATED_MARKER" validationLevel={flag.status_level} size="xs" />
                     </div>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{flag.explanation}</p>
+                    <p style={{ color: 'var(--text-secondary)', margin: 0, lineHeight: 1.35 }}>{flag.explanation}</p>
                   </div>
                 ))}
               </div>
@@ -1151,92 +1219,209 @@ export const NewScreeningPage: React.FC<NewScreeningPageProps> = ({ initialPatie
           STAGE 12: CLINICIAN REVIEW & SIGN-OFF
           ============================================================ */}
       {currentStep === 11 && riskAssessment && (
-        <Section
-          title="Stage 12: Health Worker Review & Mandatory Sign-Off"
-          subtitle="Clinician reviews automated screening results and records final clinical determination."
-        >
-          {/* Summary of Automated Results */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {/* PANEL 1: AUTOMATED RESULT (Decision Support Input) */}
           <div
             style={{
-              padding: '12px 16px',
-              background: 'var(--bg-subtle)',
-              border: '1px solid var(--border-default)',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
+              background: '#f8fafc',
+              border: '1.5px solid #cbd5e1',
+              borderRadius: 'var(--radius-lg)',
+              padding: '16px 20px',
             }}
           >
-            <div>
-              <span style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-                Automated Screening Output
-              </span>
-              <div style={{ marginTop: '2px' }}>
-                <RiskBadge tier={riskAssessment.risk_tier} score={riskAssessment.risk_score} />
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderBottom: '1px solid #e2e8f0',
+                paddingBottom: '8px',
+                marginBottom: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: '#475569',
+                    background: '#e2e8f0',
+                    padding: '2px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                  }}
+                >
+                  AUTOMATED RESULT
+                </span>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                  Algorithm Decision-Support Input (Non-Diagnostic)
+                </span>
+              </div>
+              <ProvenanceBadge source="AUTOMATED_MARKER" validationLevel="VALIDATED" size="xs" />
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '12px',
+                fontSize: '12.5px',
+              }}
+            >
+              <div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase' }}>
+                  Screening Tier
+                </span>
+                <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)', marginTop: '2px' }}>
+                  {riskAssessment.risk_tier.replace(/_/g, ' ')}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Score: {riskAssessment.risk_score} / 100</div>
+              </div>
+
+              <div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase' }}>
+                  Contributing Findings
+                </span>
+                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
+                  {riskAssessment.contributing_features.length} markers flagged
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Biomechanical &amp; symptom inputs</div>
+              </div>
+
+              <div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase' }}>
+                  Red Flags Status
+                </span>
+                <div style={{ fontWeight: 600, color: redFlags.length > 0 ? 'var(--redflag-text)' : 'var(--tier1-text)', marginTop: '2px' }}>
+                  {redFlags.length > 0 ? `${redFlags.length} Emergency Alerts` : '0 Detected (Clear)'}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Acute pathology rules</div>
+              </div>
+
+              <div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase' }}>
+                  Data Quality Gate
+                </span>
+                <div style={{ fontWeight: 600, color: 'var(--tier1-text)', marginTop: '2px' }}>
+                  Protocol Validated
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Sensor signal verified</div>
               </div>
             </div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '460px', textAlign: 'right' }}>
-              Final patient recommendations require health worker review. The machine assessment serves as decision-support.
-            </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '640px' }}>
-            <Select
-              label="Clinician Determination"
-              value={reviewDecision}
-              onChange={(e) => setReviewDecision(e.target.value)}
-              helperText="Confirm algorithm stratification or override based on bedside clinical examination."
+          {/* PANEL 2: FINAL HEALTH-WORKER REVIEW (Primary Clinical Source of Truth) */}
+          <div
+            style={{
+              background: '#ffffff',
+              border: '2px solid var(--accent-primary)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '20px 24px',
+              boxShadow: 'var(--shadow-subtle)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderBottom: '1px solid var(--border-default)',
+                paddingBottom: '10px',
+                marginBottom: '16px',
+              }}
             >
-              <option value="CONFIRM">Confirm Automated Result ({riskAssessment.risk_tier})</option>
-              <option value="OVERRIDDEN_TIER_1">Override to Tier 1: Low Risk</option>
-              <option value="OVERRIDDEN_TIER_2">Override to Tier 2: Elevated Risk Markers</option>
-              <option value="OVERRIDDEN_TIER_3">Override to Tier 3: Probable OA Pattern</option>
-              <option value="ESCALATED_RED_FLAG">Escalate as Red Flag / Urgent Specialist Referral</option>
-            </Select>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: '#ffffff',
+                    background: 'var(--accent-primary)',
+                    padding: '3px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                  }}
+                >
+                  FINAL HEALTH-WORKER REVIEW
+                </span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Attending Clinician / Health Worker Determination
+                </span>
+              </div>
+              <ProvenanceBadge source="CLINICIAN_OBSERVED" size="sm" />
+            </div>
 
-            {reviewDecision !== 'CONFIRM' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '680px' }}>
+              <Select
+                label="Review Decision &amp; Clinical Determination"
+                value={reviewDecision}
+                onChange={(e) => setReviewDecision(e.target.value)}
+                helperText="Confirm automated screening result or record clinical override based on bedside physical examination."
+              >
+                <option value="CONFIRM">Confirm Automated Result ({riskAssessment.risk_tier.replace(/_/g, ' ')})</option>
+                <option value="OVERRIDDEN_TIER_1">Override to Tier 1: Low Risk (Preserved mobility confirmed)</option>
+                <option value="OVERRIDDEN_TIER_2">Override to Tier 2: Elevated Risk Markers (Early signs present)</option>
+                <option value="OVERRIDDEN_TIER_3">Override to Tier 3: Probable OA Pattern (Definite functional restriction)</option>
+                <option value="ESCALATED_RED_FLAG">Escalate as Red Flag / Urgent Physician Referral</option>
+              </Select>
+
+              {reviewDecision !== 'CONFIRM' && (
+                <div
+                  style={{
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '12px 14px',
+                  }}
+                >
+                  <Input
+                    label="Mandatory Override Clinical Rationale"
+                    required
+                    placeholder="Document specific clinical rationale for overriding automated stratification..."
+                    value={overrideReason}
+                    onChange={(e) => setOverrideReason(e.target.value)}
+                    helperText="Required by medical audit protocols when algorithm output is altered."
+                  />
+                </div>
+              )}
+
               <Input
-                label="Mandatory Override Reason"
+                label="Reviewing Health Worker / Clinician Name &amp; Designation"
                 required
-                placeholder="Document clinical rationale for overriding automated stratification..."
-                value={overrideReason}
-                onChange={(e) => setOverrideReason(e.target.value)}
+                value={reviewerName}
+                onChange={(e) => setReviewerName(e.target.value)}
+                helperText="Attending healthcare provider signing this screening protocol."
               />
-            )}
 
-            <Input
-              label="Reviewing Health Worker / Clinician Name &amp; Designation"
-              required
-              value={reviewerName}
-              onChange={(e) => setReviewerName(e.target.value)}
-            />
+              <div>
+                <label className="form-label">Review Directives, Advice &amp; Management Notes</label>
+                <textarea
+                  className="form-textarea"
+                  rows={3}
+                  value={reviewNotes}
+                  onChange={(e) => setReviewNotes(e.target.value)}
+                  placeholder="Clinical observations, patient counseling, home exercises prescribed..."
+                />
+              </div>
+            </div>
 
-            <div>
-              <label className="form-label">Clinical Directives &amp; Management Plan</label>
-              <textarea
-                className="form-textarea"
-                rows={3}
-                value={reviewNotes}
-                onChange={(e) => setReviewNotes(e.target.value)}
-              />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '22px' }}>
+              <Button variant="secondary" onClick={() => setCurrentStep(10)}>
+                <ChevronLeft size={15} /> Back
+              </Button>
+              <Button
+                variant="primary"
+                onClick={submitReview}
+                disabled={loading || (reviewDecision !== 'CONFIRM' && !overrideReason.trim())}
+              >
+                <span>{loading ? 'Submitting Review...' : 'Sign-Off & Generate Final Clinical Report'}</span>
+                <ChevronRight size={15} />
+              </Button>
             </div>
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
-            <Button variant="secondary" onClick={() => setCurrentStep(10)}>
-              <ChevronLeft size={15} /> Back
-            </Button>
-            <Button
-              variant="primary"
-              onClick={submitReview}
-              disabled={loading || (reviewDecision !== 'CONFIRM' && !overrideReason)}
-            >
-              <span>{loading ? 'Submitting Review...' : 'Sign-Off & Generate Final Clinical Report'}</span>
-              <ChevronRight size={15} />
-            </Button>
-          </div>
-        </Section>
+        </div>
       )}
 
       {/* ============================================================

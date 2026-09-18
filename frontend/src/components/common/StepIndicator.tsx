@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { Check, Lock } from 'lucide-react';
 
 interface StepIndicatorProps {
   steps: string[];
@@ -37,26 +37,26 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span
             style={{
-              fontSize: '12px',
-              fontWeight: 600,
+              fontSize: '11px',
+              fontWeight: 700,
               color: 'var(--accent-primary)',
               textTransform: 'uppercase',
-              letterSpacing: '0.04em',
+              letterSpacing: '0.05em',
             }}
           >
             Clinical Workflow
           </span>
           <span style={{ color: 'var(--border-medium)' }}>•</span>
           <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-            Stage {currentStep + 1} of {steps.length}: {steps[currentStep]}
+            Step {currentStep + 1} of {steps.length}: {steps[currentStep]}
           </span>
         </div>
-        <span style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
-          Sequential screening protocol
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11.5px', color: 'var(--text-secondary)' }}>
+          <span>Sequential Gate: {Math.min(maxCompletedStep + 1, steps.length)} of {steps.length} unlocked</span>
+        </div>
       </div>
 
-      {/* Progress track */}
+      {/* Progress track showing Completed, Current, and Locked states */}
       <div
         style={{
           display: 'flex',
@@ -67,28 +67,33 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
       >
         {steps.map((name, idx) => {
           const isCurrent = idx === currentStep;
-          const isDone = idx < currentStep || idx <= maxCompletedStep;
-          const isClickable = idx <= maxCompletedStep && idx !== currentStep;
+          const isCompleted = idx < currentStep || (idx <= maxCompletedStep && !isCurrent);
+          const isLocked = idx > maxCompletedStep;
+          const isClickable = isCompleted;
 
           let bg = 'var(--bg-subtle)';
-          let color = 'var(--text-secondary)';
+          let color = 'var(--text-faint)';
           let border = '1px solid var(--border-default)';
 
           if (isCurrent) {
             bg = 'var(--accent-primary)';
             color = 'var(--text-on-accent)';
             border = '1px solid var(--accent-primary)';
-          } else if (isDone) {
-            bg = 'var(--accent-primary-subtle)';
-            color = 'var(--accent-primary)';
-            border = '1px solid #ccfbf1';
+          } else if (isCompleted) {
+            bg = 'var(--tier1-bg)';
+            color = 'var(--tier1-text)';
+            border = '1px solid var(--tier1-border)';
+          } else if (isLocked) {
+            bg = 'var(--bg-page)';
+            color = 'var(--text-faint)';
+            border = '1px dashed var(--border-default)';
           }
 
           return (
             <button
               key={name}
               type="button"
-              disabled={!isClickable}
+              disabled={isLocked || isCurrent}
               onClick={() => {
                 if (isClickable) onStepClick(idx);
               }}
@@ -103,23 +108,25 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
                 border,
                 fontSize: '11.5px',
                 fontWeight: isCurrent ? 600 : 500,
-                cursor: isClickable ? 'pointer' : 'default',
+                cursor: isClickable ? 'pointer' : isLocked ? 'not-allowed' : 'default',
                 whiteSpace: 'nowrap',
-                opacity: !isDone && !isCurrent ? 0.6 : 1,
-                transition: 'background-color 150ms ease',
+                opacity: isLocked ? 0.6 : 1,
+                transition: 'all 150ms ease',
               }}
               title={
                 isCurrent
-                  ? `Active Step: ${name}`
-                  : isClickable
-                  ? `Return to ${name}`
-                  : `Step ${idx + 1} (${name}) requires completion of previous stages`
+                  ? `Current Step: ${idx + 1}. ${name}`
+                  : isCompleted
+                  ? `Completed: Click to navigate back to ${name}`
+                  : `Locked: Step ${idx + 1} (${name}) requires completion of previous stages`
               }
             >
-              {isDone && !isCurrent ? (
+              {isCurrent ? (
+                <span style={{ fontWeight: 700 }}>{idx + 1}.</span>
+              ) : isCompleted ? (
                 <Check size={12} strokeWidth={2.5} />
               ) : (
-                <span>{idx + 1}.</span>
+                <Lock size={10} style={{ opacity: 0.7 }} />
               )}
               <span>{name}</span>
             </button>

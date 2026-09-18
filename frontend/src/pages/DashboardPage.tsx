@@ -1,22 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api/client';
-import { ScreeningSession, Patient, RiskAssessment } from '../api/types';
+import { ScreeningSession, Patient, RiskAssessment, RedFlag } from '../api/types';
 import { RiskBadge } from '../components/common/RiskBadge';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { Metric } from '../components/common/Metric';
 import { Button } from '../components/common/Button';
 import { Section } from '../components/common/Section';
-import { EmptyState } from '../components/common/EmptyState';
 import { ScreeningDisclaimer } from '../components/common/ScreeningDisclaimer';
+import { ProvenanceBadge } from '../components/common/ProvenanceBadge';
 import {
-  Users,
-  ClipboardCheck,
+  AlertOctagon,
   Clock,
   AlertTriangle,
-  AlertOctagon,
-  Plus,
   Activity,
+  Plus,
   ChevronRight,
+  CheckCircle,
+  Database,
+  Cpu,
+  HardDrive,
+  ShieldCheck,
+  RotateCcw,
 } from 'lucide-react';
 import { NavItem } from '../components/layout/Sidebar';
 
@@ -25,11 +29,23 @@ interface DashboardPageProps {
   onRunSimulation?: (scenario: string) => void;
 }
 
+interface RedFlagQueueItem {
+  screening: ScreeningSession;
+  patient?: Patient;
+  redFlag: RedFlag;
+}
+
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [screenings, setScreenings] = useState<ScreeningSession[]>([]);
   const [risks, setRisks] = useState<Record<string, RiskAssessment>>({});
+  const [reviews, setReviews] = useState<Record<string, boolean>>({});
+  const [activeRedFlags, setActiveRedFlags] = useState<RedFlagQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [systemHealth, setSystemHealth] = useState<{ status: string; database: string }>({
+    status: 'healthy',
+    database: 'sqlite_ready',
+  });
 
   const loadData = async () => {
     try {
@@ -38,16 +54,55 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       setPatients(ptData);
       setScreenings(scData);
 
+      const ptMap: Record<string, Patient> = {};
+      ptData.forEach((p) => {
+        ptMap[p.id] = p;
+      });
+
       const riskMap: Record<string, RiskAssessment> = {};
-      for (const sc of scData) {
-        try {
-          const r = await api.getRisk(sc.id);
-          if (r) riskMap[sc.id] = r;
-        } catch {}
-      }
+      const reviewMap: Record<string, boolean> = {};
+      const redFlagList: RedFlagQueueItem[] = [];
+
+      // Query risks, reviews, and red flags for screenings
+      await Promise.all(
+        scData.map(async (sc) => {
+          try {
+            const r = await api.getRisk(sc.id);
+            if (r) riskMap[sc.id] = r;
+          } catch {}
+
+          try {
+            const rev = await api.getReview(sc.id);
+            if (rev && rev.id) reviewMap[sc.id] = true;
+          } catch {}
+
+          try {
+            const flags = await api.getRedFlags(sc.id);
+            if (flags && Array.isArray(flags)) {
+              flags
+                .filter((f) => f.detected)
+                .forEach((rf) => {
+                  redFlagList.push({
+                    screening: sc,
+                    patient: ptMap[sc.patient_id],
+                    redFlag: rf,
+                  });
+                });
+            }
+          } catch {}
+        })
+      );
+
       setRisks(riskMap);
+      setReviews(reviewMap);
+      setActiveRedFlags(redFlagList);
+
+      try {
+        const h = await api.checkHealth();
+        if (h) setSystemHealth(h);
+      } catch {}
     } catch (err) {
-      console.error('Failed to load dashboard data:', err);
+      console.error('Failed to load clinical dashboard data:', err);
     } finally {
       setLoading(false);
     }
@@ -57,16 +112,37 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     loadData();
   }, []);
 
-  // Compute the 5 clinical operational metrics
+  // Filter clinical operational attention queues
+  // 1. Red Flags: activeRedFlags
+  // 2. Pending Health-Worker Reviews: COMPLETED status without review
+  const pendingReviewSessions = screenings.filter(
+    (s) => s.screening_status === 'COMPLETED' && !reviews[s.id]
+  );
+
+  // 3. Quality Failures: QUALITY_INSUFFICIENT
+  const qualityFailureSessions = screenings.filter(
+    (s) => s.screening_status === 'QUALITY_INSUFFICIENT'
+  );
+
+  // 4. Active In-Progress Screenings: IN_PROGRESS
+  const inProgressSessions = screenings.filter((s) => s.screening_status === 'IN_PROGRESS');
+
+  const allAttentionQueuesEmpty =
+    !loading &&
+    activeRedFlags.length === 0 &&
+    pendingReviewSessions.length === 0 &&
+    qualityFailureSessions.length === 0 &&
+    inProgressSessions.length === 0;
+
+  // General statistics scoped to local database / current camp
   const totalPatients = patients.length;
-  const screeningsCompleted = screenings.filter((s) => s.screening_status !== 'IN_PROGRESS').length;
-  const pendingReviews = screenings.filter((s) => s.screening_status === 'COMPLETED').length;
-  const qualityInsufficientCount = screenings.filter((s) => s.screening_status === 'QUALITY_INSUFFICIENT').length;
+  const completedScreenings = screenings.filter(
+    (s) => s.screening_status === 'COMPLETED' || s.screening_status === 'REVIEWED' || reviews[s.id]
+  ).length;
 
   let tier1Count = 0;
   let tier2Count = 0;
   let tier3Count = 0;
-  let activeRedFlagsCount = 0;
 
   Object.values(risks).forEach((r) => {
     if (r.risk_tier === 'TIER_1_LOW_RISK') tier1Count++;
@@ -74,52 +150,89 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     else if (r.risk_tier === 'TIER_3_PROBABLE_OA') tier3Count++;
   });
 
-  // Recent screenings (top 6)
-  const recentScreenings = [...screenings].slice(0, 6);
-
-  // Screenings awaiting clinician sign-off
-  const awaitingReviewList = screenings.filter((s) => s.screening_status === 'COMPLETED').slice(0, 4);
-
-  const totalStratified = tier1Count + tier2Count + tier3Count;
-  const tier1Pct = totalStratified > 0 ? (tier1Count / totalStratified) * 100 : 0;
-  const tier2Pct = totalStratified > 0 ? (tier2Count / totalStratified) * 100 : 0;
-  const tier3Pct = totalStratified > 0 ? (tier3Count / totalStratified) * 100 : 0;
+  const recentScreenings = [...screenings].slice(0, 5);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Top Workstation Status Bar */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+      {/* Scope & Attention Header Bar */}
       <div
         style={{
           background: 'var(--bg-surface)',
           border: '1px solid var(--border-default)',
           borderRadius: 'var(--radius-lg)',
-          padding: '16px 20px',
+          padding: '14px 20px',
           boxShadow: 'var(--shadow-subtle)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
         }}
       >
         <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>
-            NER Community Health Camp • Assam PHC Mobile Unit #3
-          </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '2px' }}>
-            Offline-first early joint risk stratification using validated KOOS questionnaires and functional mobility tests.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 style={{ fontSize: '17px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+              Clinical Operational Workstation
+            </h2>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--accent-primary)',
+                background: 'var(--accent-primary-subtle)',
+                padding: '2px 7px',
+                borderRadius: 'var(--radius-sm)',
+              }}
+            >
+              ATTENTION QUEUES
+            </span>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              fontSize: '12px',
+              color: 'var(--text-secondary)',
+              marginTop: '4px',
+            }}
+          >
+            <span>
+              <strong>Scope:</strong> Mobile Camp Unit #3 (Assam Catchment)
+            </span>
+            <span>•</span>
+            <span>
+              <strong>Temporal Window:</strong> Today / Active Screening Shift
+            </span>
+            <span>•</span>
+            <span>
+              <strong>Storage:</strong> Local Standalone SQLite Database
+            </span>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RotateCcw size={13} />}
+            onClick={loadData}
+            title="Refresh local operational queues"
+          >
+            Refresh Queues
+          </Button>
           <Button
             variant="primary"
-            icon={<Plus size={15} />}
+            size="sm"
+            icon={<Plus size={14} />}
             onClick={() => onNavigate('new-screening')}
           >
-            New Screening
+            Start New Screening
           </Button>
           <Button
             variant="secondary"
-            icon={<Activity size={15} />}
+            size="sm"
+            icon={<Activity size={14} />}
             onClick={() => onNavigate('sensors')}
           >
             Live IMU Scope
@@ -127,168 +240,183 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* Primary 5 Operational Metrics */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: '12px',
-        }}
-      >
-        <Metric
-          label="Total Patients"
-          value={totalPatients}
-          subtext="Registered in catchment"
-          icon={<Users size={18} />}
-        />
-        <Metric
-          label="Screenings Completed"
-          value={screeningsCompleted}
-          subtext="Protocols finalized"
-          status="default"
-          icon={<ClipboardCheck size={18} />}
-        />
-        <Metric
-          label="Pending Reviews"
-          value={pendingReviews}
-          subtext="Awaiting MO sign-off"
-          status={pendingReviews > 0 ? 'attention' : 'default'}
-          icon={<Clock size={18} />}
-        />
-        <Metric
-          label="Quality Insufficient"
-          value={qualityInsufficientCount}
-          subtext="Requires re-trial"
-          status={qualityInsufficientCount > 0 ? 'attention' : 'default'}
-          icon={<AlertTriangle size={18} />}
-        />
-        <Metric
-          label="Active Red Flags"
-          value={activeRedFlagsCount}
-          subtext="Urgent escalation"
-          status={activeRedFlagsCount > 0 ? 'critical' : 'default'}
-          icon={<AlertOctagon size={18} />}
-        />
-      </div>
+      {/* SECTION 1: ATTENTION QUEUES (What requires my attention?) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <h3
+            style={{
+              fontSize: '13px',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              color: 'var(--text-primary)',
+              margin: 0,
+            }}
+          >
+            Active Clinical Attention Queues
+          </h3>
+          <span style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
+            Prioritized by clinical severity: Red Flags → Reviews → Quality → In-Progress
+          </span>
+        </div>
 
-      {/* Middle Grid: Risk Distribution Summary & Pending Reviews */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '16px' }}>
-        {/* Risk Stratification Breakdown */}
-        <Section
-          title="Screening Risk Stratification Distribution"
-          subtitle="Preliminary 3-tier risk markers across current session cohort."
-        >
-          {/* Visual Distribution Bar */}
-          <div style={{ marginBottom: '14px' }}>
-            <div
-              style={{
-                height: '10px',
-                borderRadius: 'var(--radius-sm)',
-                overflow: 'hidden',
-                display: 'flex',
-                background: 'var(--bg-subtle)',
-                border: '1px solid var(--border-default)',
-              }}
-            >
-              <div style={{ width: `${tier1Pct}%`, background: 'var(--tier1-text)', transition: 'width 200ms ease' }} title={`Tier 1: ${tier1Count}`} />
-              <div style={{ width: `${tier2Pct}%`, background: 'var(--tier2-text)', transition: 'width 200ms ease' }} title={`Tier 2: ${tier2Count}`} />
-              <div style={{ width: `${tier3Pct}%`, background: 'var(--tier3-text)', transition: 'width 200ms ease' }} title={`Tier 3: ${tier3Count}`} />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '6px' }}>
-              <span>Total Stratified: {totalStratified} screenings</span>
-              <span>Local SQLite Database</span>
+        {/* If all attention queues are clear */}
+        {allAttentionQueuesEmpty && (
+          <div
+            style={{
+              background: 'var(--tier1-bg)',
+              border: '1px solid var(--tier1-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '18px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '14px',
+            }}
+          >
+            <CheckCircle size={22} color="var(--tier1-text)" style={{ flexShrink: 0 }} />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--tier1-text)' }}>
+                All current screenings are up to date.
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-body)', marginTop: '2px' }}>
+                Zero active red flags, zero pending health-worker reviews, and zero data quality failures in the local database.
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Tier Counts & Clinical Guidelines */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {/* PRIORITY QUEUE 1: RED FLAGS (Immediate escalation) */}
+        {activeRedFlags.length > 0 && (
+          <div
+            style={{
+              background: '#fff1f2',
+              border: '1.5px solid var(--redflag-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px 16px',
+            }}
+          >
             <div
               style={{
                 display: 'flex',
-                justifyContent: 'space-between',
                 alignItems: 'center',
-                padding: '8px 12px',
-                background: 'var(--tier1-bg)',
-                border: '1px solid var(--tier1-border)',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '12.5px',
+                justifyContent: 'space-between',
+                marginBottom: '10px',
               }}
             >
-              <div>
-                <strong style={{ color: 'var(--tier1-text)' }}>Tier 1: Low Risk (Preventive)</strong>
-                <div style={{ color: 'var(--text-body)', fontSize: '11.5px' }}>Preserved mobility; joint wellness &amp; lifestyle education.</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertOctagon size={18} color="var(--redflag-text)" strokeWidth={2.5} />
+                <span
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: 'var(--redflag-text)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.03em',
+                  }}
+                >
+                  Priority 1: Active Red Flags ({activeRedFlags.length}) — Immediate Physician Referral Required
+                </span>
               </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: '14px', color: 'var(--tier1-text)' }}>
-                {tier1Count}
-              </span>
+              <ProvenanceBadge source="CLINICAL_ESCALATION" size="xs" />
             </div>
 
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '8px 12px',
-                background: 'var(--tier2-bg)',
-                border: '1px solid var(--tier2-border)',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '12.5px',
-              }}
-            >
-              <div>
-                <strong style={{ color: 'var(--tier2-text)' }}>Tier 2: Elevated Risk Markers</strong>
-                <div style={{ color: 'var(--text-body)', fontSize: '11.5px' }}>Early hesitation / BMI load; targeted exercise &amp; 3-mo follow-up.</div>
-              </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: '14px', color: 'var(--tier2-text)' }}>
-                {tier2Count}
-              </span>
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '8px 12px',
-                background: 'var(--tier3-bg)',
-                border: '1px solid var(--tier3-border)',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '12.5px',
-              }}
-            >
-              <div>
-                <strong style={{ color: 'var(--tier3-text)' }}>Tier 3: Probable OA Pattern</strong>
-                <div style={{ color: 'var(--text-body)', fontSize: '11.5px' }}>Cluster of age, crepitus, &amp; functional restriction; clinical exam.</div>
-              </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: '14px', color: 'var(--tier3-text)' }}>
-                {tier3Count}
-              </span>
-            </div>
-          </div>
-        </Section>
-
-        {/* Pending Reviews / Attention Needed */}
-        <Section
-          title="Clinician Reviews Requiring Sign-Off"
-          subtitle="Screenings with completed data collection awaiting health worker determination."
-          action={
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onNavigate('screenings')}
-            >
-              View All
-            </Button>
-          }
-        >
-          {awaitingReviewList.length === 0 ? (
-            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
-              All completed screening sessions have been reviewed by a health worker.
-            </div>
-          ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {awaitingReviewList.map((sc) => {
+              {activeRedFlags.map((item, idx) => (
+                <div
+                  key={`${item.screening.id}-${idx}`}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid var(--redflag-border)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '10px 14px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '12px',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '13px' }}>
+                        {item.patient?.name || 'Unknown Patient'}
+                      </span>
+                      <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
+                        ({item.patient?.patient_identifier || item.screening.patient_id.slice(0, 8)})
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '10.5px',
+                          fontWeight: 700,
+                          color: '#fff',
+                          background: 'var(--redflag-text)',
+                          padding: '1px 6px',
+                          borderRadius: 'var(--radius-sm)',
+                        }}
+                      >
+                        {item.redFlag.severity} ESCALATION
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--redflag-text)', marginTop: '3px', fontWeight: 600 }}>
+                      {item.redFlag.flag_name} ({item.redFlag.flag_code})
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                      <strong>Action Required:</strong> {item.redFlag.action_required || 'Refer immediately for physical medical evaluation.'}
+                    </div>
+                  </div>
+
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    icon={<ChevronRight size={13} />}
+                    onClick={() => onNavigate('screenings', { sessionId: item.screening.id })}
+                  >
+                    Open Session
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* PRIORITY QUEUE 2: PENDING HEALTH-WORKER REVIEWS */}
+        {pendingReviewSessions.length > 0 && (
+          <div
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--tier2-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px 16px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '10px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Clock size={16} color="var(--tier2-text)" />
+                <span
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: 'var(--tier2-text)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.03em',
+                  }}
+                >
+                  Priority 2: Pending Health-Worker Reviews ({pendingReviewSessions.length}) — Awaiting Determination
+                </span>
+              </div>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                Requires Attending Clinician Review &amp; Sign-Off
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {pendingReviewSessions.slice(0, 4).map((sc) => {
                 const pt = patients.find((p) => p.id === sc.patient_id);
                 const r = risks[sc.id];
 
@@ -296,26 +424,31 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   <div
                     key={sc.id}
                     style={{
+                      background: 'var(--bg-subtle)',
+                      border: '1px solid var(--border-default)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '8px 12px',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      padding: '8px 12px',
-                      background: 'var(--bg-subtle)',
-                      border: '1px solid var(--border-default)',
-                      borderRadius: 'var(--radius-md)',
-                      fontSize: '12.5px',
                     }}
                   >
                     <div>
-                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {pt?.name || 'Unknown Patient'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13px' }}>
+                          {pt?.name || 'Unknown Patient'}
+                        </span>
+                        <span style={{ fontSize: '11.5px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
+                          ID: {pt?.patient_identifier || sc.id.slice(0, 8)}
+                        </span>
+                        <StatusBadge status="AWAITING_REVIEW" size="sm" />
                       </div>
-                      <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
-                        ID: {pt?.patient_identifier || sc.id.slice(0, 8)} • {new Date(sc.started_at).toLocaleDateString()}
+                      <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        Completed at: {sc.completed_at ? new Date(sc.completed_at).toLocaleTimeString() : 'Recently'} • Operator: {sc.operator_name || 'Health Worker'}
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <RiskBadge tier={r?.risk_tier} score={r?.risk_score} size="sm" />
                       <Button
                         variant="secondary"
@@ -323,50 +456,249 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                         icon={<ChevronRight size={13} />}
                         onClick={() => onNavigate('screenings', { sessionId: sc.id })}
                       >
-                        Review
+                        Review &amp; Sign-Off
                       </Button>
                     </div>
                   </div>
                 );
               })}
             </div>
-          )}
-        </Section>
+          </div>
+        )}
+
+        {/* PRIORITY QUEUE 3: QUALITY FAILURES */}
+        {qualityFailureSessions.length > 0 && (
+          <div
+            style={{
+              background: '#fffbeb',
+              border: '1px solid #fde68a',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px 16px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '10px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle size={16} color="#b45309" />
+                <span
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: '#b45309',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.03em',
+                  }}
+                >
+                  Priority 3: Data Quality Failures ({qualityFailureSessions.length}) — Repeat Trial Required
+                </span>
+              </div>
+              <ProvenanceBadge source="SENSOR_DERIVED" validationLevel="PROVISIONAL" size="xs" />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {qualityFailureSessions.map((sc) => {
+                const pt = patients.find((p) => p.id === sc.patient_id);
+                return (
+                  <div
+                    key={sc.id}
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #fef08a',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '8px 12px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13px' }}>
+                        {pt?.name || 'Unknown Patient'}
+                      </span>
+                      <span style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginLeft: '8px' }}>
+                        ID: {pt?.patient_identifier || sc.id.slice(0, 8)}
+                      </span>
+                      <div style={{ fontSize: '11.5px', color: '#b45309', marginTop: '2px' }}>
+                        Sensor signal saturation or movement artifact detected during mobility protocol.
+                      </div>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => onNavigate('screenings', { sessionId: sc.id })}
+                    >
+                      Repeat Protocol
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* PRIORITY QUEUE 4: ACTIVE IN-PROGRESS SCREENINGS */}
+        {inProgressSessions.length > 0 && (
+          <div
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-default)',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px 16px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '10px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Activity size={16} color="var(--accent-secondary)" />
+                <span
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: 'var(--text-primary)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.03em',
+                  }}
+                >
+                  Priority 4: Active In-Progress Screenings ({inProgressSessions.length})
+                </span>
+              </div>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                Sessions started but not yet completed
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {inProgressSessions.map((sc) => {
+                const pt = patients.find((p) => p.id === sc.patient_id);
+                return (
+                  <div
+                    key={sc.id}
+                    style={{
+                      background: 'var(--bg-subtle)',
+                      border: '1px solid var(--border-default)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '8px 12px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13px' }}>
+                        {pt?.name || 'Unknown Patient'}
+                      </span>
+                      <span style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginLeft: '8px' }}>
+                        ID: {pt?.patient_identifier || sc.id.slice(0, 8)}
+                      </span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginLeft: '8px' }}>
+                        Started: {new Date(sc.started_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => onNavigate('screenings', { sessionId: sc.id })}
+                    >
+                      Resume Screening
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Recent Screening Sessions Table */}
-      <Section
-        title="Recent Community Screening Sessions"
-        subtitle="Last recorded screening sessions in local SQLite."
-        action={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onNavigate('screenings')}
+      {/* SECTION 2: GENERAL COHORT STATISTICS (Explicitly Scoped: Current Camp / Local Database) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <h3
+            style={{
+              fontSize: '13px',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              color: 'var(--text-primary)',
+              margin: 0,
+            }}
           >
-            View Full Archive
+            General Cohort Statistics
+          </h3>
+          <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+            Scope: Current Camp Mobile Unit #3 • Local Database
+          </span>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(5, 1fr)',
+            gap: '10px',
+          }}
+        >
+          <Metric
+            label="Total Catchment"
+            value={totalPatients}
+            subtext="Registered patients in camp"
+            status="default"
+          />
+          <Metric
+            label="Completed Protocols"
+            value={completedScreenings}
+            subtext="Data collection finalized"
+            status="default"
+          />
+          <Metric
+            label="Tier 1 — Low Risk"
+            value={tier1Count}
+            subtext="Joint education protocol"
+            status="default"
+          />
+          <Metric
+            label="Tier 2 — Elevated Markers"
+            value={tier2Count}
+            subtext="Exercise & 3-mo follow-up"
+            status={tier2Count > 0 ? 'attention' : 'default'}
+          />
+          <Metric
+            label="Tier 3 — Probable OA"
+            value={tier3Count}
+            subtext="Priority clinical exam"
+            status={tier3Count > 0 ? 'attention' : 'default'}
+          />
+        </div>
+      </div>
+
+      {/* SECTION 3: RECENT SCREENING ARCHIVE (Compact Table) */}
+      <Section
+        title="Recent Screenings Archive"
+        subtitle="Last 5 records in local database (Mobile Unit #3)."
+        action={
+          <Button variant="secondary" size="sm" onClick={() => onNavigate('screenings')}>
+            View All Screenings
           </Button>
         }
       >
         {loading ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-            Loading recent screenings...
+          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
+            Loading local records...
           </div>
         ) : recentScreenings.length === 0 ? (
-          <EmptyState
-            title="No screening sessions recorded yet"
-            description="Initiate patient screening to begin collecting clinical mobility and questionnaire markers."
-            action={
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<Plus size={14} />}
-                onClick={() => onNavigate('new-screening')}
-              >
-                Start New Screening
-              </Button>
-            }
-          />
+          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
+            No screenings recorded in this session yet.
+          </div>
         ) : (
           <div className="table-container" style={{ border: 'none' }}>
             <table className="clinical-table">
@@ -374,9 +706,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 <tr>
                   <th>Patient ID</th>
                   <th>Patient Name</th>
-                  <th>Date &amp; Time</th>
-                  <th>Status</th>
-                  <th>Screening Risk Tier</th>
+                  <th>Session Timestamp</th>
+                  <th>Screening Status</th>
+                  <th>Automated Tier</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -384,20 +716,25 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 {recentScreenings.map((sc) => {
                   const pt = patients.find((p) => p.id === sc.patient_id);
                   const r = risks[sc.id];
+                  const hasReview = reviews[sc.id];
 
                   return (
                     <tr key={sc.id}>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12.5px', color: 'var(--accent-secondary-hover)' }}>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--accent-secondary-hover)' }}>
                         {pt ? pt.patient_identifier : sc.patient_id.slice(0, 8)}
                       </td>
-                      <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                      <td style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13px' }}>
                         {pt ? pt.name : 'Unknown Patient'}
                       </td>
                       <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                         {new Date(sc.started_at).toLocaleString()}
                       </td>
                       <td>
-                        <StatusBadge status={sc.screening_status} size="sm" />
+                        <StatusBadge
+                          status={sc.screening_status}
+                          isReviewed={hasReview}
+                          size="sm"
+                        />
                       </td>
                       <td>
                         <RiskBadge tier={r?.risk_tier} score={r?.risk_score} size="sm" />
@@ -408,7 +745,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                           size="sm"
                           onClick={() => onNavigate('screenings', { sessionId: sc.id })}
                         >
-                          View Details
+                          View Session
                         </Button>
                       </td>
                     </tr>
@@ -420,7 +757,86 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         )}
       </Section>
 
-      {/* Footer Disclaimer */}
+      {/* SECTION 4: COMPACT OPERATIONAL SYSTEM HEALTH */}
+      <div
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 'var(--radius-md)',
+          padding: '12px 16px',
+        }}
+      >
+        <div
+          style={{
+            fontSize: '11px',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            color: 'var(--text-secondary)',
+            marginBottom: '8px',
+          }}
+        >
+          Workstation Operational Health
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Database size={15} color="var(--tier1-text)" />
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Database: SQLite 3
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--tier1-text)' }}>
+                {systemHealth.database === 'sqlite_ready' ? 'Connected & Healthy' : 'Operational'}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Cpu size={15} color="var(--accent-primary)" />
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Sensor: 6-Axis IMU
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                BLE / Serial Interface Ready
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <HardDrive size={15} color="var(--tier1-text)" />
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Storage: Local Standalone
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--tier1-text)' }}>
+                Disk Write Persistent
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldCheck size={15} color="var(--tier1-text)" />
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Application: v1.0.0
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--tier1-text)' }}>
+                Offline Screening Workstation
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mandatory Clinical Screening Disclaimer */}
       <ScreeningDisclaimer compact={false} includeReviewRequirement={true} />
     </div>
   );

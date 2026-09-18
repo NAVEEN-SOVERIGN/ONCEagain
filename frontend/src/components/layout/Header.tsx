@@ -147,17 +147,31 @@ export const Header: React.FC<HeaderProps> = ({ currentTab = 'dashboard', onSimu
           <span>Health Worker (Operator)</span>
         </div>
 
-        {/* Simulation Quick Trigger */}
+        {/* Demo / Simulation Tools - Visually segregated from primary clinical actions */}
         <div style={{ position: 'relative' }}>
           <button
             type="button"
-            className="btn btn-secondary btn-compact"
             onClick={() => setShowSimMenu(!showSimMenu)}
             disabled={simulating}
-            style={{ gap: '4px' }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 9px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px dashed var(--border-medium)',
+              background: 'var(--bg-subtle)',
+              color: 'var(--text-secondary)',
+              fontSize: '11.5px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 150ms ease',
+            }}
+            title="Demo / Testing utility: Generates synthetic patient records to verify clinical algorithms and train operators."
           >
-            <span>{simulating ? 'Simulating...' : 'Run Simulation'}</span>
-            <ChevronDown size={13} />
+            <span style={{ fontSize: '12px' }}>🧪</span>
+            <span>{simulating ? 'Simulating...' : 'Demo / Simulation'}</span>
+            <ChevronDown size={12} style={{ opacity: 0.7 }} />
           </button>
 
           {showSimMenu && (
@@ -165,58 +179,74 @@ export const Header: React.FC<HeaderProps> = ({ currentTab = 'dashboard', onSimu
               style={{
                 position: 'absolute',
                 right: 0,
-                top: '110%',
+                top: '115%',
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border-medium)',
                 borderRadius: 'var(--radius-md)',
-                boxShadow: '0 4px 12px rgba(15, 23, 42, 0.1)',
-                width: '230px',
+                boxShadow: '0 4px 16px rgba(15, 23, 42, 0.12)',
+                width: '260px',
                 zIndex: 60,
                 overflow: 'hidden',
-                padding: '4px',
+                padding: '6px',
               }}
             >
               <div
                 style={{
-                  padding: '6px 8px',
-                  fontSize: '11px',
-                  color: 'var(--text-secondary)',
+                  padding: '6px 8px 8px 8px',
                   borderBottom: '1px solid var(--border-default)',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
+                  marginBottom: '4px',
                 }}
               >
-                Test Clinical Scenarios
+                <div
+                  style={{
+                    fontSize: '10.5px',
+                    fontWeight: 700,
+                    color: 'var(--text-faint)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Demo &amp; Testing Utility
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: 1.3 }}>
+                  Generates synthetic patient records for training &amp; triage verification. Not for live patient care.
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => triggerSimulation('LOW_RISK')}
-                style={simMenuItemStyle}
-              >
-                <span style={{ color: 'var(--tier1-text)' }}>●</span> Tier 1: Low Risk (Healthy)
-              </button>
-              <button
-                type="button"
-                onClick={() => triggerSimulation('ELEVATED_RISK')}
-                style={simMenuItemStyle}
-              >
-                <span style={{ color: 'var(--tier2-text)' }}>●</span> Tier 2: Elevated Risk Markers
-              </button>
-              <button
-                type="button"
-                onClick={() => triggerSimulation('PROBABLE_OA')}
-                style={simMenuItemStyle}
-              >
-                <span style={{ color: 'var(--tier3-text)' }}>●</span> Tier 3: Probable OA Pattern
-              </button>
-              <button
-                type="button"
-                onClick={() => triggerSimulation('RED_FLAG_SEPTIC')}
-                style={simMenuItemStyle}
-              >
-                <span style={{ color: 'var(--redflag-text)' }}>●</span> Critical Red Flag (Septic)
-              </button>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <button
+                  type="button"
+                  onClick={() => triggerSimulation('LOW_RISK')}
+                  style={simMenuItemStyle}
+                >
+                  <span style={{ color: 'var(--tier1-text)', fontSize: '10px' }}>●</span>
+                  <span>Synthetic: Tier 1 Low Risk</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => triggerSimulation('ELEVATED_RISK')}
+                  style={simMenuItemStyle}
+                >
+                  <span style={{ color: 'var(--tier2-text)', fontSize: '10px' }}>●</span>
+                  <span>Synthetic: Tier 2 Elevated Risk</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => triggerSimulation('PROBABLE_OA')}
+                  style={simMenuItemStyle}
+                >
+                  <span style={{ color: 'var(--tier3-text)', fontSize: '10px' }}>●</span>
+                  <span>Synthetic: Tier 3 Probable OA</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => triggerSimulation('RED_FLAG_SEPTIC')}
+                  style={simMenuItemStyle}
+                >
+                  <span style={{ color: 'var(--redflag-text)', fontSize: '10px' }}>●</span>
+                  <span>Synthetic: Red Flag Emergency</span>
+                </button>
+              </div>
             </div>
           )}
         </div>

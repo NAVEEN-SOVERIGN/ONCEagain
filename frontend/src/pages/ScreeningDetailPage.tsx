@@ -14,9 +14,10 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { Button } from '../components/common/Button';
 import { Section } from '../components/common/Section';
 import { Alert } from '../components/common/Alert';
-import { ClinicalFinding } from '../components/common/ClinicalFinding';
 import { ScreeningDisclaimer } from '../components/common/ScreeningDisclaimer';
-import { ArrowLeft, UserCheck, Calendar, MapPin } from 'lucide-react';
+import { ProvenanceBadge } from '../components/common/ProvenanceBadge';
+import { EvidenceTable } from '../components/screening/EvidenceTable';
+import { ArrowLeft, Calendar, MapPin, Clock } from 'lucide-react';
 
 interface ScreeningDetailPageProps {
   session: ScreeningSession;
@@ -70,6 +71,8 @@ export const ScreeningDetailPage: React.FC<ScreeningDetailPageProps> = ({ sessio
     );
   }
 
+  const isReviewed = review !== null && review.id !== undefined;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       {/* Top Action Bar */}
@@ -83,9 +86,12 @@ export const ScreeningDetailPage: React.FC<ScreeningDetailPageProps> = ({ sessio
           Back to Sessions List
         </Button>
 
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <StatusBadge status={session.screening_status} />
-          <RiskBadge tier={risk?.risk_tier} score={risk?.risk_score} />
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <StatusBadge
+            status={session.screening_status}
+            isReviewed={isReviewed}
+          />
+          {risk && <RiskBadge tier={risk.risk_tier} score={risk.risk_score} />}
         </div>
       </div>
 
@@ -93,12 +99,12 @@ export const ScreeningDetailPage: React.FC<ScreeningDetailPageProps> = ({ sessio
       {redFlags.length > 0 && (
         <Alert
           type="redflag"
-          title="CRITICAL CLINICAL RED FLAG DETECTED"
+          title="CRITICAL CLINICAL RED FLAG DETECTED — URGENT CLINICAL ESCALATION"
           detectedFinding={redFlags.map((r) => r.flag_name).join(', ')}
           explanation={redFlags.map((r) => r.explanation).join('. ')}
           actionRequired={redFlags[0]?.action_required || 'Urgent medical referral / clinical escalation.'}
         >
-          Clinical signs require immediate medical review. Routine OA screening pathway suspended.
+          Independent Red-Flag Safety Engine detected potential acute joint condition requiring immediate clinical evaluation. Routine screening triage pathway bypassed.
         </Alert>
       )}
 
@@ -141,38 +147,39 @@ export const ScreeningDetailPage: React.FC<ScreeningDetailPageProps> = ({ sessio
 
         <div>
           <span style={{ color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600 }}>
-            Camp Location
+            Camp Location &amp; Scope
           </span>
           <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <MapPin size={13} color="var(--accent-primary)" />
-            {session.camp_location || 'Assam Mobile Camp'}
+            {session.camp_location || 'Assam Mobile Camp Unit #3'}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '1px' }}>
-            Op: {session.operator_name || 'Health Worker'}
+            Operator: {session.operator_name || 'Health Worker'}
           </div>
         </div>
 
         <div>
           <span style={{ color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600 }}>
-            Session Timestamp
+            Session Timing &amp; State
           </span>
           <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Calendar size={13} color="var(--text-secondary)" />
-            {new Date(session.started_at).toLocaleDateString()}
+            {new Date(session.started_at).toLocaleDateString()} {new Date(session.started_at).toLocaleTimeString()}
           </div>
           <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-            ID: {session.id.slice(0, 8)}...
+            Session ID: {session.id.slice(0, 8)}...
           </div>
         </div>
       </div>
 
-      {/* Triage Disclaimer */}
-      <ScreeningDisclaimer compact={false} includeReviewRequirement={true} />
-
       {/* Two Column Layout: Clinical Bedside Assessment & Functional Tests */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         {/* Clinical Bedside Findings */}
-        <Section title="Physical Examination Checklist" subtitle="Recorded physical examination markers.">
+        <Section
+          title="Physical Examination Checklist"
+          subtitle="Clinician-observed musculoskeletal examination parameters."
+          action={<ProvenanceBadge source="CLINICIAN_OBSERVED" size="xs" />}
+        >
           {clinical ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
               <div style={detailRowStyle}>
@@ -216,7 +223,11 @@ export const ScreeningDetailPage: React.FC<ScreeningDetailPageProps> = ({ sessio
         </Section>
 
         {/* Functional Movement Tests */}
-        <Section title="Functional Mobility Tests" subtitle="Objective kinematic and timed test results.">
+        <Section
+          title="Functional Mobility Tests"
+          subtitle="Objective kinematic and timed test results."
+          action={<ProvenanceBadge source="SENSOR_DERIVED" size="xs" />}
+        >
           {tests.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {tests.map((t) => (
@@ -260,88 +271,238 @@ export const ScreeningDetailPage: React.FC<ScreeningDetailPageProps> = ({ sessio
 
       {/* Automated Risk Stratification Model Output */}
       {risk && (
-        <Section
-          title="Automated Screening Risk Stratification"
-          subtitle="Model version and contributing risk factor breakdown."
-          action={<RiskBadge tier={risk.risk_tier} score={risk.risk_score} />}
+        <div
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '20px 24px',
+            boxShadow: 'var(--shadow-subtle)',
+          }}
         >
-          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 'var(--radius-md)', marginBottom: '14px' }}>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>
-              Explanation
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px' }}>
+            <div>
+              <div
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: 'var(--text-secondary)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                AUTOMATED SCREENING ASSESSMENT
+              </div>
+
+              {/* Prominent Screening Tier */}
+              <div
+                style={{
+                  fontSize: '22px',
+                  fontWeight: 700,
+                  color:
+                    risk.risk_tier === 'TIER_3_PROBABLE_OA'
+                      ? 'var(--tier3-text)'
+                      : risk.risk_tier === 'TIER_2_ELEVATED_RISK'
+                      ? 'var(--tier2-text)'
+                      : 'var(--tier1-text)',
+                  marginTop: '4px',
+                }}
+              >
+                {risk.risk_tier === 'TIER_1_LOW_RISK' && 'Tier 1 — Low Risk'}
+                {risk.risk_tier === 'TIER_2_ELEVATED_RISK' && 'Tier 2 — Elevated Risk Markers'}
+                {risk.risk_tier === 'TIER_3_PROBABLE_OA' && 'Tier 3 — Probable OA Pattern'}
+              </div>
+
+              {/* Secondary Numerical Risk Score */}
+              <div
+                style={{
+                  fontSize: '13px',
+                  color: 'var(--text-secondary)',
+                  marginTop: '3px',
+                }}
+              >
+                Calculated Screening Score:{' '}
+                <strong style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                  {risk.risk_score}
+                </strong>{' '}
+                / 100 • Engine Version: {risk.model_version}
+              </div>
             </div>
-            <p style={{ fontSize: '13px', color: 'var(--text-body)', marginTop: '2px', lineHeight: 1.4 }}>
+
+            {/* Clear Disclaimer Tag */}
+            <div
+              style={{
+                padding: '8px 14px',
+                background: 'var(--bg-subtle)',
+                border: '1px solid var(--border-default)',
+                borderRadius: 'var(--radius-md)',
+                textAlign: 'right',
+              }}
+            >
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                Screening result — not a diagnosis.
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                Objective biomarker synthesis to guide clinical examination
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: 'var(--bg-subtle)',
+              padding: '12px 16px',
+              borderRadius: 'var(--radius-md)',
+              marginTop: '16px',
+              marginBottom: '16px',
+              borderLeft: '3px solid var(--accent-primary)',
+            }}
+          >
+            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '3px' }}>
+              Screening Marker Interpretation:
+            </div>
+            <p style={{ fontSize: '12.5px', color: 'var(--text-body)', lineHeight: 1.45, margin: 0 }}>
               {risk.explanation}
             </p>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {risk.contributing_features.map((cf, idx) => (
-              <ClinicalFinding
-                key={idx}
-                label={cf.feature}
-                detectedValue={String(cf.value)}
-                source={`Weight: +${cf.weight}`}
-                explanation={cf.explanation}
-                isFlagged={cf.weight > 10}
-              />
-            ))}
+          {/* Structured Evidence Table */}
+          <div style={{ marginTop: '12px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.04em' }}>
+              Structured Contributing Findings
+            </div>
+            <EvidenceTable features={risk.contributing_features} />
           </div>
-        </Section>
+        </div>
       )}
 
-      {/* Health Worker Review Section */}
-      <Section
-        title="Health Worker Review &amp; Sign-Off Determination"
-        subtitle="Mandatory clinician sign-off verifying or overriding automated screening output."
-      >
+      {/* HEALTH-WORKER REVIEW SECTION (Unmistakable Visual Contrast) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <h3
+          style={{
+            fontSize: '13px',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            color: 'var(--text-primary)',
+            margin: 0,
+          }}
+        >
+          Clinical Review &amp; Sign-Off Workflow
+        </h3>
+
         {review ? (
           <div
             style={{
-              padding: '14px 16px',
-              background: 'var(--bg-subtle)',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-default)',
-              fontSize: '13px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
+              background: '#ffffff',
+              border: '2px solid var(--accent-primary)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '18px 22px',
+              boxShadow: 'var(--shadow-subtle)',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <UserCheck size={16} color="var(--accent-primary)" />
-                <span style={{ fontWeight: 600 }}>Final Determination: {review.final_result}</span>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderBottom: '1px solid var(--border-default)',
+                paddingBottom: '10px',
+                marginBottom: '14px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: '#ffffff',
+                    background: 'var(--accent-primary)',
+                    padding: '3px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                  }}
+                >
+                  FINAL HEALTH-WORKER REVIEW
+                </span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Clinical Determination Verified &amp; Signed
+                </span>
               </div>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                Reviewed on: {review.reviewed_at ? new Date(review.reviewed_at).toLocaleString() : 'N/A'}
-              </span>
+              <ProvenanceBadge source="CLINICIAN_OBSERVED" size="sm" />
             </div>
 
-            <div>
-              <span style={{ color: 'var(--text-secondary)' }}>Reviewing Clinician: </span>
-              <strong>{review.reviewed_by}</strong>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', fontSize: '13px' }}>
+              <div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase' }}>
+                  Final Clinical Determination
+                </span>
+                <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--accent-primary)', marginTop: '2px' }}>
+                  {review.final_result}
+                </div>
+              </div>
+
+              <div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase' }}>
+                  Reviewing Attending Clinician
+                </span>
+                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
+                  {review.reviewed_by}
+                </div>
+              </div>
+
+              <div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase' }}>
+                  Review Timestamp
+                </span>
+                <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  {review.reviewed_at ? new Date(review.reviewed_at).toLocaleString() : 'Recorded'}
+                </div>
+              </div>
             </div>
 
             {review.review_notes && (
-              <div>
-                <span style={{ color: 'var(--text-secondary)' }}>Directives &amp; Notes: </span>
-                <span>{review.review_notes}</span>
+              <div style={{ marginTop: '12px', padding: '10px 12px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)' }}>
+                <span style={{ fontSize: '11.5px', color: 'var(--text-secondary)', fontWeight: 600 }}>Directives &amp; Treatment Plan:</span>
+                <div style={{ fontSize: '12.5px', marginTop: '2px', color: 'var(--text-primary)' }}>{review.review_notes}</div>
               </div>
             )}
 
             {review.override_reason && (
-              <div style={{ color: 'var(--tier2-text)' }}>
-                <span style={{ fontWeight: 600 }}>Override Reason: </span>
-                <span>{review.override_reason}</span>
+              <div style={{ marginTop: '8px', padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 'var(--radius-sm)' }}>
+                <span style={{ fontSize: '11.5px', color: '#b45309', fontWeight: 700 }}>Mandatory Override Rationale:</span>
+                <div style={{ fontSize: '12.5px', marginTop: '2px', color: '#92400e' }}>{review.override_reason}</div>
               </div>
             )}
           </div>
         ) : (
-          <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
-            Awaiting clinician review and sign-off.
+          <div
+            style={{
+              padding: '16px 20px',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--tier2-border)',
+              borderRadius: 'var(--radius-md)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+            }}
+          >
+            <Clock size={20} color="var(--tier2-text)" />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--tier2-text)' }}>
+                Awaiting Attending Clinician Review &amp; Determination
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                This screening session has finalized data collection, but requires medical worker sign-off before final triage referral.
+              </div>
+            </div>
           </div>
         )}
-      </Section>
+      </div>
+
+      {/* Mandatory Disclaimer */}
+      <ScreeningDisclaimer compact={false} includeReviewRequirement={true} />
     </div>
   );
 };

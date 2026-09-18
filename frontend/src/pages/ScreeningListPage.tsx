@@ -17,6 +17,7 @@ export const ScreeningListPage: React.FC<ScreeningListPageProps> = ({ onSelectSe
   const [screenings, setScreenings] = useState<ScreeningSession[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [risks, setRisks] = useState<Record<string, RiskAssessment>>({});
+  const [reviews, setReviews] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [riskFilter, setRiskFilter] = useState<string>('ALL');
@@ -30,13 +31,24 @@ export const ScreeningListPage: React.FC<ScreeningListPageProps> = ({ onSelectSe
       setPatients(ptList);
 
       const riskMap: Record<string, RiskAssessment> = {};
-      for (const sc of scList) {
-        try {
-          const r = await api.getRisk(sc.id);
-          if (r) riskMap[sc.id] = r;
-        } catch {}
-      }
+      const revMap: Record<string, boolean> = {};
+
+      await Promise.all(
+        scList.map(async (sc) => {
+          try {
+            const r = await api.getRisk(sc.id);
+            if (r) riskMap[sc.id] = r;
+          } catch {}
+
+          try {
+            const rev = await api.getReview(sc.id);
+            if (rev && rev.id) revMap[sc.id] = true;
+          } catch {}
+        })
+      );
+
       setRisks(riskMap);
+      setReviews(revMap);
     } catch (err) {
       console.error('Failed to load screenings:', err);
     } finally {
@@ -49,7 +61,15 @@ export const ScreeningListPage: React.FC<ScreeningListPageProps> = ({ onSelectSe
   }, []);
 
   const filteredScreenings = screenings.filter((sc) => {
-    if (statusFilter !== 'ALL' && sc.screening_status !== statusFilter) return false;
+    const isReviewed = reviews[sc.id];
+    if (statusFilter === 'AWAITING_REVIEW') {
+      if (sc.screening_status !== 'COMPLETED' || isReviewed) return false;
+    } else if (statusFilter === 'REVIEWED') {
+      if (sc.screening_status !== 'REVIEWED' && !isReviewed) return false;
+    } else if (statusFilter !== 'ALL' && sc.screening_status !== statusFilter) {
+      return false;
+    }
+
     const r = risks[sc.id];
     if (riskFilter !== 'ALL') {
       if (!r && riskFilter !== 'UNSTRATIFIED') return false;
@@ -140,7 +160,8 @@ export const ScreeningListPage: React.FC<ScreeningListPageProps> = ({ onSelectSe
             >
               <option value="ALL">All Statuses</option>
               <option value="IN_PROGRESS">In Progress</option>
-              <option value="COMPLETED">Data Completed</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="AWAITING_REVIEW">Awaiting Review</option>
               <option value="REVIEWED">Clinician Reviewed</option>
               <option value="QUALITY_INSUFFICIENT">Quality Insufficient</option>
             </select>
@@ -243,7 +264,11 @@ export const ScreeningListPage: React.FC<ScreeningListPageProps> = ({ onSelectSe
                       {sc.camp_location || 'Community Center'}
                     </td>
                     <td>
-                      <StatusBadge status={sc.screening_status} size="sm" />
+                      <StatusBadge
+                        status={sc.screening_status}
+                        isReviewed={reviews[sc.id]}
+                        size="sm"
+                      />
                     </td>
                     <td>
                       <RiskBadge tier={risk?.risk_tier} score={risk?.risk_score} size="sm" />

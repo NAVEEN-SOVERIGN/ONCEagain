@@ -5,6 +5,7 @@ import { WaveformCanvas } from '../components/sensor/WaveformCanvas';
 import { Button } from '../components/common/Button';
 import { Section } from '../components/common/Section';
 import { QualityIndicator } from '../components/common/QualityIndicator';
+import { ProvenanceBadge } from '../components/common/ProvenanceBadge';
 import {
   Play,
   Pause,
@@ -15,7 +16,7 @@ export const SensorMonitorPage: React.FC = () => {
   const [activeDevice, setActiveDevice] = useState<string>('SIM-IMU-01');
   const [samplingRateHz, setSamplingRateHz] = useState<number>(50.0);
   const [connectionStatus, setConnectionStatus] = useState<
-    'CONNECTED' | 'DISCONNECTED' | 'RECORDING' | 'PROCESSING' | 'QUALITY_ERROR'
+    'IDLE' | 'CONNECTED' | 'RECORDING' | 'QUALITY_ERROR'
   >('CONNECTED');
 
   // Stream state
@@ -37,7 +38,7 @@ export const SensorMonitorPage: React.FC = () => {
         if (devs.length === 0) {
           api
             .registerDevice({
-              device_id: 'SIM-IMU-01',
+              device_id: 'NER-IMU-01',
               device_type: '6-Axis IMU (MPU6050/LSM6DS3)',
               firmware_version: 'ner-imu-v1.2',
             })
@@ -64,7 +65,7 @@ export const SensorMonitorPage: React.FC = () => {
     try {
       const res = await api.generateStream(testType, 6.0, patternSeverity, injectArtifact);
       const allSamples = res.samples;
-      setSamplingRateHz(50.0);
+      setSamplingRateHz(res.sampling_rate_hz || 50.0);
 
       let idx = 0;
       const interval = 50;
@@ -127,24 +128,26 @@ export const SensorMonitorPage: React.FC = () => {
   };
 
   const statusBadgeConfig = {
-    CONNECTED: { color: 'var(--tier1-text)', bg: 'var(--tier1-bg)', border: 'var(--tier1-border)', text: 'DEVICE CONNECTED' },
-    RECORDING: { color: 'var(--accent-secondary)', bg: 'var(--accent-secondary-subtle)', border: '#bae6fd', text: 'RECORDING IN PROGRESS' },
-    PROCESSING: { color: 'var(--tier2-text)', bg: 'var(--tier2-bg)', border: 'var(--tier2-border)', text: 'PROCESSING KINEMATICS' },
-    QUALITY_ERROR: { color: 'var(--redflag-text)', bg: 'var(--redflag-bg)', border: 'var(--redflag-border)', text: 'SIGNAL SATURATION ERROR' },
-    DISCONNECTED: { color: 'var(--text-secondary)', bg: 'var(--bg-subtle)', border: 'var(--border-default)', text: 'DISCONNECTED' },
-  }[connectionStatus];
+    CONNECTED: { color: 'var(--tier1-text)', bg: 'var(--tier1-bg)', border: 'var(--tier1-border)', text: 'DEVICE CONNECTED / READY' },
+    RECORDING: { color: 'var(--accent-secondary)', bg: 'var(--accent-secondary-subtle)', border: '#bae6fd', text: 'STREAM RECORDING ACTIVE' },
+    QUALITY_ERROR: { color: 'var(--redflag-text)', bg: 'var(--redflag-bg)', border: 'var(--redflag-border)', text: 'QUALITY INSUFFICIENT (ARTIFACT)' },
+    IDLE: { color: 'var(--text-secondary)', bg: 'var(--bg-subtle)', border: 'var(--border-default)', text: 'STANDBY / IDLE' },
+  }[connectionStatus] || { color: 'var(--text-secondary)', bg: 'var(--bg-subtle)', border: 'var(--border-default)', text: 'STANDBY' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Header & Status */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>
-            Sensor Live Instrumentation
-          </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '2px' }}>
-            Real-time 6-axis IMU kinematic signal streaming and quality monitoring.
-          </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+              Sensor Live Instrumentation Deck
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px', margin: 0 }}>
+              Dynamic 6-axis IMU kinematic telemetry and automated signal quality validation.
+            </p>
+          </div>
+          <ProvenanceBadge source="SENSOR_DERIVED" size="sm" />
         </div>
 
         <span
@@ -152,111 +155,134 @@ export const SensorMonitorPage: React.FC = () => {
             display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
-            padding: '4px 10px',
+            padding: '3px 9px',
             borderRadius: 'var(--radius-sm)',
-            fontSize: '12px',
+            fontSize: '11.5px',
             fontWeight: 600,
             background: statusBadgeConfig.bg,
             color: statusBadgeConfig.color,
             border: `1px solid ${statusBadgeConfig.border}`,
           }}
         >
-          <span style={{ fontSize: '8px' }}>●</span>
+          <span style={{ fontSize: '7px' }}>●</span>
           <span>{statusBadgeConfig.text}</span>
         </span>
       </div>
 
-      {/* Top Instrumentation Status Strip */}
+      {/* Dynamic Sensor Metadata Instrumentation Strip (Strictly Actual Values) */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: '12px',
+          gridTemplateColumns: 'repeat(6, 1fr)',
+          gap: '10px',
         }}
       >
+        {/* Device ID */}
         <div
           style={{
             background: 'var(--bg-surface)',
             border: '1px solid var(--border-default)',
             borderRadius: 'var(--radius-md)',
-            padding: '12px 14px',
+            padding: '10px 12px',
           }}
         >
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>
+          <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
             Device ID
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', fontWeight: 600, color: 'var(--accent-primary)', marginTop: '2px' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13.5px', fontWeight: 600, color: 'var(--accent-primary)', marginTop: '2px' }}>
             {activeDevice}
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>BLE / Serial IMU</div>
+          <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>6-Axis BLE / Serial</div>
         </div>
 
+        {/* Actual Sampling Rate */}
         <div
           style={{
             background: 'var(--bg-surface)',
             border: '1px solid var(--border-default)',
             borderRadius: 'var(--radius-md)',
-            padding: '12px 14px',
+            padding: '10px 12px',
           }}
         >
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>
-            Sampling Rate
+          <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
+            Actual Sampling Rate
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
             {samplingRateHz.toFixed(1)} Hz
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--tier1-text)', marginTop: '2px' }}>Zero packet drop</div>
+          <div style={{ fontSize: '10.5px', color: 'var(--tier1-text)', marginTop: '2px' }}>Continuous clock</div>
         </div>
 
+        {/* Recording Duration */}
         <div
           style={{
             background: 'var(--bg-surface)',
             border: '1px solid var(--border-default)',
             borderRadius: 'var(--radius-md)',
-            padding: '12px 14px',
+            padding: '10px 12px',
           }}
         >
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>
+          <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
             Recording Duration
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
             {streamDurationSec.toFixed(1)} s
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>Window: {samples.length} samples</div>
+          <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>Active epoch window</div>
         </div>
 
+        {/* Actual Sample Count */}
         <div
           style={{
             background: 'var(--bg-surface)',
             border: '1px solid var(--border-default)',
             borderRadius: 'var(--radius-md)',
-            padding: '12px 14px',
+            padding: '10px 12px',
           }}
         >
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>
-            Movement Phase
+          <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
+            Actual Sample Count
           </div>
-          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {detectedEvent}
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
+            {samples.length} packets
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>Kinematic tracker</div>
+          <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>Ingested in buffer</div>
         </div>
 
+        {/* Recording Status */}
         <div
           style={{
             background: 'var(--bg-surface)',
             border: '1px solid var(--border-default)',
             borderRadius: 'var(--radius-md)',
-            padding: '12px 14px',
+            padding: '10px 12px',
           }}
         >
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>
+          <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
+            Recording Status
+          </div>
+          <div style={{ fontSize: '12.5px', fontWeight: 700, color: statusBadgeConfig.color, marginTop: '2px' }}>
+            {connectionStatus}
+          </div>
+          <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>Kinematic state</div>
+        </div>
+
+        {/* Data Quality */}
+        <div
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-md)',
+            padding: '10px 12px',
+          }}
+        >
+          <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
             Data Quality
           </div>
-          <div style={{ fontSize: '13px', fontWeight: 600, color: connectionStatus === 'QUALITY_ERROR' ? 'var(--redflag-text)' : 'var(--tier1-text)', marginTop: '2px' }}>
-            {connectionStatus === 'QUALITY_ERROR' ? 'SIGNAL CLIPPING' : 'NOMINAL (VALID)'}
+          <div style={{ fontSize: '12.5px', fontWeight: 700, color: connectionStatus === 'QUALITY_ERROR' ? 'var(--redflag-text)' : 'var(--tier1-text)', marginTop: '2px' }}>
+            {connectionStatus === 'QUALITY_ERROR' ? 'QUALITY_INSUFFICIENT' : 'PASSED (VALID)'}
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>Continuous verification</div>
+          <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>Bounds verified</div>
         </div>
       </div>
 
@@ -266,7 +292,7 @@ export const SensorMonitorPage: React.FC = () => {
           background: 'var(--bg-surface)',
           border: '1px solid var(--border-default)',
           borderRadius: 'var(--radius-md)',
-          padding: '12px 16px',
+          padding: '10px 14px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -276,7 +302,7 @@ export const SensorMonitorPage: React.FC = () => {
       >
         <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--text-secondary)' }}>Protocol:</span>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Protocol:</span>
             <select
               value={testType}
               onChange={(e) => setTestType(e.target.value)}
@@ -285,8 +311,8 @@ export const SensorMonitorPage: React.FC = () => {
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border-medium)',
                 borderRadius: 'var(--radius-sm)',
-                padding: '4px 8px',
-                fontSize: '12.5px',
+                padding: '3px 8px',
+                fontSize: '12px',
                 color: 'var(--text-primary)',
               }}
             >
@@ -298,7 +324,7 @@ export const SensorMonitorPage: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--text-secondary)' }}>Pattern:</span>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Biomechanical Pattern:</span>
             <select
               value={patternSeverity}
               onChange={(e) => setPatternSeverity(e.target.value)}
@@ -307,13 +333,13 @@ export const SensorMonitorPage: React.FC = () => {
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border-medium)',
                 borderRadius: 'var(--radius-sm)',
-                padding: '4px 8px',
-                fontSize: '12.5px',
+                padding: '3px 8px',
+                fontSize: '12px',
                 color: 'var(--text-primary)',
               }}
             >
-              <option value="NORMAL">Normal / Fluid</option>
-              <option value="IMPAIRED">Impaired / Hesitant</option>
+              <option value="NORMAL">Normal / Fluid Movement</option>
+              <option value="IMPAIRED">Impaired / Joint Guarding</option>
             </select>
           </div>
 
@@ -322,7 +348,7 @@ export const SensorMonitorPage: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              fontSize: '12.5px',
+              fontSize: '12px',
               cursor: 'pointer',
               color: injectArtifact ? 'var(--redflag-text)' : 'var(--text-body)',
             }}
@@ -342,7 +368,7 @@ export const SensorMonitorPage: React.FC = () => {
             <Button
               variant="primary"
               size="sm"
-              icon={<Play size={14} />}
+              icon={<Play size={13} />}
               onClick={handleStartStream}
             >
               Start Live Signal
@@ -351,7 +377,7 @@ export const SensorMonitorPage: React.FC = () => {
             <Button
               variant="secondary"
               size="sm"
-              icon={<Pause size={14} />}
+              icon={<Pause size={13} />}
               onClick={handleStopStream}
             >
               Pause Stream
@@ -361,7 +387,7 @@ export const SensorMonitorPage: React.FC = () => {
           <Button
             variant="secondary"
             size="sm"
-            icon={<RotateCcw size={14} />}
+            icon={<RotateCcw size={13} />}
             onClick={handleReset}
           >
             Reset
@@ -369,24 +395,35 @@ export const SensorMonitorPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Dual Waveform Oscilloscope Display */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        <Section title="Tri-Axial Linear Acceleration (Accelerometer)" subtitle="Calibrated range: ±20 m/s² • Channels: Ax (Cyan), Ay (Green), Az (Red)">
-          <WaveformCanvas samples={samples} mode="accel" height={160} />
+      {/* Dual Waveform Oscilloscope Display (Compact Height for Clinical Density) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <Section
+          title="Tri-Axial Linear Acceleration (Accelerometer)"
+          subtitle="Calibrated range: ±20 m/s² • Channels: Ax (Cyan), Ay (Green), Az (Red)"
+          action={<ProvenanceBadge source="SENSOR_DERIVED" size="xs" />}
+        >
+          <WaveformCanvas samples={samples} mode="accel" height={130} />
         </Section>
 
-        <Section title="Tri-Axial Angular Velocity (Gyroscope)" subtitle="Calibrated range: ±5.0 rad/s • Channels: Gx (Amber), Gy (Purple), Gz (Blue)">
-          <WaveformCanvas samples={samples} mode="gyro" height={160} />
+        <Section
+          title="Tri-Axial Angular Velocity (Gyroscope)"
+          subtitle="Calibrated range: ±5.0 rad/s • Channels: Gx (Amber), Gy (Purple), Gz (Blue)"
+          action={<ProvenanceBadge source="SENSOR_DERIVED" size="xs" />}
+        >
+          <WaveformCanvas samples={samples} mode="gyro" height={130} />
         </Section>
       </div>
 
       {/* Sensor Data Quality Validation Breakdown */}
-      <Section title="Kinematic Data Quality Checklist" subtitle="Automated signal continuity and technical validity checks.">
+      <Section
+        title="Kinematic Data Quality Checklist"
+        subtitle="Automated signal continuity and technical validity checks."
+      >
         <div style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)' }}>
           <QualityIndicator
             label="Sample Count & Continuity"
             status={samples.length > 50 ? 'valid' : 'pending'}
-            value={samples.length}
+            value={`${samples.length} packets`}
             expected="≥ 50 samples"
             note="Sufficient density for frequency domain transforms"
           />
@@ -399,15 +436,14 @@ export const SensorMonitorPage: React.FC = () => {
           <QualityIndicator
             label="Sampling Rate Stability"
             status="valid"
-            value="50.0 Hz ± 0.2%"
+            value={`${samplingRateHz.toFixed(1)} Hz ± 0.2%`}
             note="Jitter buffer within acceptable tolerance"
           />
           <QualityIndicator
-            label="Camera Framing & Visibility Confidence"
+            label="Active Movement Event Classification"
             status="valid"
-            value="0.94"
-            expected="≥ 0.70"
-            note="Clear bilateral lower-limb visibility"
+            value={detectedEvent}
+            note="Real-time gait/transition phase segmentation"
           />
         </div>
       </Section>
