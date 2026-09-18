@@ -7,6 +7,7 @@ import { NewScreeningPage } from './pages/NewScreeningPage';
 import { ScreeningListPage } from './pages/ScreeningListPage';
 import { ScreeningDetailPage } from './pages/ScreeningDetailPage';
 import { SensorMonitorPage } from './pages/SensorMonitorPage';
+import { PhysioPodDashboardPage } from './pages/PhysioPodDashboardPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { Patient, ScreeningSession } from './api/types';
@@ -85,6 +86,10 @@ export function App() {
         ))}
 
       {currentTab === 'sensors' && <SensorMonitorPage />}
+
+      {currentTab === 'physio-pods' && (
+        <PhysioPodDashboardPage onNavigate={handleNavigate} />
+      )}
 
       {currentTab === 'reports' && <ReportsPage />}
 

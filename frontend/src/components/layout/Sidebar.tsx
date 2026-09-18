@@ -5,6 +5,7 @@ import {
   PlusCircle,
   ClipboardList,
   Cpu,
+  Radio,
   FileText,
   Settings,
 } from 'lucide-react';
@@ -16,6 +17,7 @@ export type NavItem =
   | 'new-screening'
   | 'screenings'
   | 'sensors'
+  | 'physio-pods'
   | 'reports'
   | 'settings';
 
@@ -31,6 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
     { id: 'new-screening', label: 'New Screening', icon: PlusCircle },
     { id: 'screenings', label: 'Screening Sessions', icon: ClipboardList },
     { id: 'sensors', label: 'Sensor Live UI', icon: Cpu },
+    { id: 'physio-pods', label: 'Physio Pods (6x)', icon: Radio },
     { id: 'reports', label: 'Reports', icon: FileText },
     { id: 'settings', label: 'Settings & Offline', icon: Settings },
   ];

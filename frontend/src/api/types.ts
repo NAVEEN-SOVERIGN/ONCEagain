@@ -260,3 +260,80 @@ export interface SimulationResult {
   flags_count: number;
   red_flags_count: number;
 }
+
+// ============================================================
+// 6-POD ESP32 PHYSIO POD SYSTEM DATA MODELS
+// ============================================================
+
+export interface PhysioPodSideStats {
+  total_trials: number;
+  hits: number;
+  misses: number;
+  wrong: number;
+  hit_rate_pct: number;
+  avg_reaction_time_ms: number;
+  min_reaction_time_ms: number;
+  max_reaction_time_ms: number;
+  fastest_pod?: number;
+}
+
+export interface PhysioPodAsymmetry {
+  reaction_time_diff_ms: number;
+  asymmetry_index_pct: number;
+  slower_side: 'LEFT' | 'RIGHT' | 'SYMMETRIC' | string;
+  clinical_note?: string;
+}
+
+export interface PhysioPodInfo {
+  pod_id: number;
+  name: string;
+  side: 'LEFT' | 'RIGHT' | string;
+  hits: number;
+  misses: number;
+  wrong: number;
+  total_stimuli?: number;
+  hit_rate_pct: number;
+  avg_reaction_time_ms: number;
+  min_reaction_time_ms: number;
+  max_reaction_time_ms: number;
+  battery_pct?: number;
+  rssi_dbm?: number;
+  status: 'ONLINE' | 'OFFLINE' | string;
+}
+
+export interface PhysioPodTrial {
+  trial_num: number;
+  time_offset_ms: number;
+  pod_id: number;
+  side: 'LEFT' | 'RIGHT' | string;
+  target_color?: string;
+  reaction_time_ms: number;
+  result: 'HIT' | 'MISS' | 'WRONG' | string;
+}
+
+export interface PhysioPodSessionData {
+  session_id: string;
+  timestamp: string;
+  device_id: string;
+  firmware_version?: string;
+  ip_address?: string;
+  protocol_name?: string;
+  duration_sec: number;
+  total_trials: number;
+  sides: {
+    left: PhysioPodSideStats;
+    right: PhysioPodSideStats;
+    asymmetry: PhysioPodAsymmetry;
+  };
+  pods: PhysioPodInfo[];
+  trials: PhysioPodTrial[];
+}
+
+export interface PhysioPodHardwareResponse {
+  source: 'esp32_hardware_live' | 'simulated_hardware_fallback' | 'demo_mode' | string;
+  connected: boolean;
+  ip_endpoint: string;
+  error?: string;
+  data: PhysioPodSessionData;
+}
+

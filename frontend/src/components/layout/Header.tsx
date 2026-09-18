@@ -14,6 +14,7 @@ const SECTION_NAMES: Record<NavItem, string> = {
   'new-screening': 'New Patient Screening Protocol',
   screenings: 'Screening Sessions Archive',
   sensors: 'Sensor Live Telemetry',
+  'physio-pods': 'Physio Pods (6x) — ESP32 Hardware Deck',
   reports: 'Clinical Reports Archive',
   settings: 'System Settings & Offline Diagnostics',
 };

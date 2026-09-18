@@ -94,3 +94,68 @@ def generate_stream(
         "samples": samples
     }
 
+# ============================================================
+# ESP32 PHYSIO POD HARDWARE INTEGRATION
+# ============================================================
+
+@router.get("/esp32/latest")
+def get_esp32_physio_pod_latest(
+    url: str = "http://192.168.4.1/api/session/latest",
+    demo_mode: bool = False,
+    allow_fallback: bool = True
+):
+    """
+    Fetches the latest 6-pod session from an ESP32 SoftAP access point (default http://192.168.4.1/api/session/latest).
+    If demo_mode is True, returns canonical reference telemetry.
+    If hardware is unreachable and allow_fallback is True, returns fallback data.
+    If allow_fallback is False, returns hardware_disconnected status.
+    """
+    from app.services.physio_pod_service import PhysioPodService
+    if demo_mode:
+        return {
+            "source": "demo_mode",
+            "connected": False,
+            "ip_endpoint": url,
+            "data": PhysioPodService.get_demo_session()
+        }
+    return PhysioPodService.fetch_live_session(url=url, allow_fallback=allow_fallback)
+
+@router.post("/esp32/push")
+def push_esp32_physio_pod_telemetry(payload: dict):
+    """
+    Receiver for ESP32 devices programmed to push their telemetry directly via HTTP POST.
+    """
+    from app.services.physio_pod_service import PhysioPodService
+    normalized = PhysioPodService.record_pushed_session(payload)
+    return {
+        "status": "received",
+        "session_id": normalized.get("session_id"),
+        "total_trials": normalized.get("total_trials")
+    }
+
+@router.post("/esp32/save")
+def save_esp32_physio_pod_test(
+    payload: dict,
+    db: Session = Depends(get_db)
+):
+    """
+    Saves an ESP32 Physio Pod bilateral agility session into the active patient screening record.
+    """
+    from app.services.physio_pod_service import PhysioPodService
+    screening_session_id = payload.get("screening_session_id")
+    session_data = payload.get("session_data")
+
+    if not screening_session_id:
+        raise HTTPException(status_code=400, detail="screening_session_id is required")
+    if not session_data:
+        raise HTTPException(status_code=400, detail="session_data is required")
+
+    test = PhysioPodService.save_to_functional_test(db, screening_session_id, session_data)
+    return {
+        "status": "saved",
+        "functional_test_id": test.id,
+        "test_type": test.test_type,
+        "duration_seconds": test.duration_seconds
+    }
+
+

@@ -19,6 +19,7 @@ import {
   HealthWorkerReviewCreate,
   Report,
   SimulationResult,
+  PhysioPodHardwareResponse,
 } from './types';
 
 const API_BASE = 'http://localhost:8000/api/v1';
@@ -165,4 +166,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ scenario, operator_name: operatorName }),
     }),
+
+  // ESP32 Physio Pod Hardware
+  getPhysioPodLatest: (url: string = 'http://192.168.4.1/api/session/latest', demoMode: boolean = false, allowFallback: boolean = true) =>
+    request<PhysioPodHardwareResponse>(`/sensors/esp32/latest?url=${encodeURIComponent(url)}&demo_mode=${demoMode}&allow_fallback=${allowFallback}`),
+  savePhysioPodTest: (screeningId: string, sessionData: any) =>
+    request<{ status: string; functional_test_id: string; test_type: string; duration_seconds: number }>('/sensors/esp32/save', {
+      method: 'POST',
+      body: JSON.stringify({ screening_session_id: screeningId, session_data: sessionData }),
+    }),
 };
+
