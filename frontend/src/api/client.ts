@@ -168,8 +168,10 @@ export const api = {
     }),
 
   // ESP32 Physio Pod Hardware
-  getPhysioPodLatest: (url: string = 'http://192.168.4.1/api/session/latest', demoMode: boolean = false, allowFallback: boolean = true) =>
-    request<PhysioPodHardwareResponse>(`/sensors/esp32/latest?url=${encodeURIComponent(url)}&demo_mode=${demoMode}&allow_fallback=${allowFallback}`),
+  getPhysioPodLatest: (url: string = 'http://192.168.4.1/api/session/latest') =>
+    request<PhysioPodHardwareResponse>(`/sensors/esp32/latest?url=${encodeURIComponent(url)}`),
+  getPhysioPodBaseline: () =>
+    request<PhysioPodHardwareResponse>('/sensors/esp32/baseline'),
   savePhysioPodTest: (screeningId: string, sessionData: any) =>
     request<{ status: string; functional_test_id: string; test_type: string; duration_seconds: number }>('/sensors/esp32/save', {
       method: 'POST',

@@ -5,7 +5,7 @@
  */
 
 // Configuration Defaults
-let DEMO_MODE = true;
+let DEMO_MODE = false;
 let ESP32_API_URL = "http://192.168.4.1/api/session/latest";
 
 let currentSession = null;
@@ -28,10 +28,12 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function setupEventListeners() {
-  modeSelect.addEventListener("change", (e) => {
-    DEMO_MODE = e.target.value === "DEMO";
-    loadSession();
-  });
+  if (modeSelect) {
+    modeSelect.addEventListener("change", (e) => {
+      DEMO_MODE = e.target.value === "DEMO";
+      loadSession();
+    });
+  }
 
   esp32UrlInput.addEventListener("change", (e) => {
     ESP32_API_URL = e.target.value.trim();
@@ -46,7 +48,7 @@ function setupEventListeners() {
       if (pollInterval) clearInterval(pollInterval);
       pollInterval = setInterval(() => {
         loadSession(true);
-      }, 3000);
+      }, 2000);
     } else {
       if (pollInterval) clearInterval(pollInterval);
       pollInterval = null;
@@ -58,20 +60,11 @@ function setupEventListeners() {
  * Fetch or load latest session data
  */
 async function loadSession(silent = false) {
-  if (DEMO_MODE) {
-    if (connectionAlert) connectionAlert.style.display = "none";
-    hardwareBadge.className = "status-badge status-demo";
-    hardwareBadge.textContent = "● DEMO MODE ACTIVE (SIMULATED 6 PODS)";
-    currentSession = demoSessionData;
-    renderDashboard(currentSession);
-    return;
-  }
-
   // Live ESP32 Mode
   try {
     if (!silent) {
       hardwareBadge.className = "status-badge status-demo";
-      hardwareBadge.textContent = "● POLLING ESP32 (192.168.4.1)...";
+      hardwareBadge.textContent = "● POLLING ESP32 HARDWARE...";
     }
 
     const controller = new AbortController();
@@ -93,28 +86,26 @@ async function loadSession(silent = false) {
     currentSession = liveData;
 
     hardwareBadge.className = "status-badge status-connected";
-    hardwareBadge.textContent = `● ESP32 ONLINE (${liveData.ip_address || "192.168.4.1"})`;
+    hardwareBadge.textContent = `● REAL ESP32 ONLINE (${liveData.ip_address || "192.168.4.1"})`;
     if (connectionAlert) connectionAlert.style.display = "none";
 
     renderDashboard(currentSession);
   } catch (err) {
     console.warn("Live ESP32 fetch failed:", err);
     hardwareBadge.className = "status-badge status-offline";
-    hardwareBadge.textContent = "● ESP32 SOFTAP OFFLINE";
+    hardwareBadge.textContent = "● ESP32 OFFLINE (AWAITING WI-FI)";
 
     if (connectionAlert) {
       connectionAlert.style.display = "block";
       connectionAlert.innerHTML = `
-        <strong>ESP32 Hardware Connection Notice:</strong> Could not reach <code>${esp32UrlInput.value}</code>.<br/>
-        1. Ensure your laptop Wi-Fi is connected directly to the ESP32 SoftAP network (default SSID <em>PhysioPod-AP</em>).<br/>
-        2. Verify the ESP32 IP is reachable at <code>192.168.4.1</code>.<br/>
-        <em>Falling back to current local session data. Switch to 'Demo Mode' above to view simulated telemetry.</em>
+        <strong>Physio Pod Hardware Notice:</strong> Awaiting connection to <code>${esp32UrlInput.value}</code>.<br/>
+        1. Connect your computer Wi-Fi to your ESP32's network (e.g. <em>PhysioPod-AP</em>).<br/>
+        2. Verify the ESP32 IP is reachable at <code>192.168.4.1</code>. Zero mock data active.
       `;
     }
 
-    // If we have no session yet, fall back to demo so screen isn't blank
     if (!currentSession) {
-      currentSession = demoSessionData;
+      currentSession = initialEmptySession;
       renderDashboard(currentSession);
     }
   }

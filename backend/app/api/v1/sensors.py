@@ -100,25 +100,26 @@ def generate_stream(
 
 @router.get("/esp32/latest")
 def get_esp32_physio_pod_latest(
-    url: str = "http://192.168.4.1/api/session/latest",
-    demo_mode: bool = False,
-    allow_fallback: bool = True
+    url: str = "http://192.168.4.1/api/session/latest"
 ):
     """
-    Fetches the latest 6-pod session from an ESP32 SoftAP access point (default http://192.168.4.1/api/session/latest).
-    If demo_mode is True, returns canonical reference telemetry.
-    If hardware is unreachable and allow_fallback is True, returns fallback data.
-    If allow_fallback is False, returns hardware_disconnected status.
+    Fetches the latest 6-pod session directly from an ESP32 access point.
+    Returns the real hardware data parsed live. Zero mock data.
     """
     from app.services.physio_pod_service import PhysioPodService
-    if demo_mode:
-        return {
-            "source": "demo_mode",
-            "connected": False,
-            "ip_endpoint": url,
-            "data": PhysioPodService.get_demo_session()
-        }
-    return PhysioPodService.fetch_live_session(url=url, allow_fallback=allow_fallback)
+    return PhysioPodService.fetch_live_session(url=url)
+
+@router.get("/esp32/baseline")
+def get_esp32_physio_pod_baseline():
+    """
+    Returns an empty zero-state for initialization when no sensors have fired yet.
+    """
+    from app.services.physio_pod_service import PhysioPodService
+    return {
+        "source": "empty_baseline",
+        "connected": False,
+        "data": PhysioPodService.get_clean_baseline()
+    }
 
 @router.post("/esp32/push")
 def push_esp32_physio_pod_telemetry(payload: dict):
