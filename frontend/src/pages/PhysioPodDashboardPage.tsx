@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api/client';
 import {
   PhysioPodHardwareResponse,
@@ -32,8 +32,6 @@ interface PhysioPodDashboardPageProps {
 
 export const PhysioPodDashboardPage: React.FC<PhysioPodDashboardPageProps> = ({ onNavigate }) => {
   const [endpointUrl, setEndpointUrl] = useState('http://192.168.4.1/api/session/latest');
-  const [autoPoll, setAutoPoll] = useState(true);
-  const [pollIntervalSec, setPollIntervalSec] = useState<number>(2);
   const [loading, setLoading] = useState(false);
   const [lastPolledAt, setLastPolledAt] = useState<Date | null>(null);
   const [pollDurationMs, setPollDurationMs] = useState<number | null>(null);
@@ -53,8 +51,6 @@ export const PhysioPodDashboardPage: React.FC<PhysioPodDashboardPageProps> = ({ 
   const [selectedScreeningId, setSelectedScreeningId] = useState<string>('');
   const [savingTest, setSavingTest] = useState(false);
   const [savedSuccessMessage, setSavedSuccessMessage] = useState<string | null>(null);
-
-  const pollIntervalRef = useRef<any>(null);
 
   // Load clean initial zero baseline (no mock data)
   useEffect(() => {
@@ -88,19 +84,6 @@ export const PhysioPodDashboardPage: React.FC<PhysioPodDashboardPageProps> = ({ 
   useEffect(() => {
     fetchLivePodData(endpointUrl);
   }, [endpointUrl]);
-
-  useEffect(() => {
-    if (autoPoll) {
-      pollIntervalRef.current = setInterval(() => {
-        fetchLivePodData(endpointUrl);
-      }, pollIntervalSec * 1000);
-    } else {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    }
-    return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
-  }, [autoPoll, endpointUrl, pollIntervalSec]);
 
   const openSaveModal = async () => {
     setSaveModalOpen(true);
@@ -205,6 +188,17 @@ export const PhysioPodDashboardPage: React.FC<PhysioPodDashboardPageProps> = ({ 
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Button
+              variant="secondary"
+              size="sm"
+              icon={<RotateCw size={14} className={loading ? 'spin' : ''} />}
+              onClick={() => fetchLivePodData(endpointUrl)}
+              disabled={loading}
+              title="Query ESP32 sensors for latest data"
+            >
+              {loading ? 'Fetching...' : 'Fetch Sensor Data'}
+            </Button>
+
+            <Button
               variant="primary"
               size="sm"
               icon={<Save size={14} />}
@@ -265,18 +259,18 @@ export const PhysioPodDashboardPage: React.FC<PhysioPodDashboardPageProps> = ({ 
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Button
-              variant="secondary"
+              variant={isLiveConnected ? 'secondary' : 'primary'}
               size="sm"
               icon={<RotateCw size={13} className={loading ? 'spin' : ''} />}
               onClick={() => fetchLivePodData(endpointUrl)}
               disabled={loading}
             >
-              {loading ? 'Probing...' : 'Check Sensor Connection'}
+              {loading ? 'Connecting...' : isLiveConnected ? 'Refresh Sensor Data' : 'Connect to Pods'}
             </Button>
           </div>
         </div>
 
-        {/* Target URL & Polling Controls */}
+        {/* Target URL & Controls */}
         <div
           style={{
             display: 'flex',
@@ -318,37 +312,6 @@ export const PhysioPodDashboardPage: React.FC<PhysioPodDashboardPageProps> = ({ 
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                cursor: 'pointer',
-                userSelect: 'none',
-                color: 'var(--text-body)',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={autoPoll}
-                onChange={(e) => setAutoPoll(e.target.checked)}
-                style={{ cursor: 'pointer' }}
-              />
-              <span>Live Auto-Poll</span>
-            </label>
-
-            <select
-              className="form-input"
-              style={{ fontSize: '11.5px', padding: '4px 6px' }}
-              value={pollIntervalSec}
-              onChange={(e) => setPollIntervalSec(Number(e.target.value))}
-              disabled={!autoPoll}
-            >
-              <option value={1}>Every 1s (Fast Stream)</option>
-              <option value={2}>Every 2s (Standard)</option>
-              <option value={3}>Every 3s</option>
-            </select>
-
             <Button
               variant="secondary"
               size="sm"
@@ -361,7 +324,7 @@ export const PhysioPodDashboardPage: React.FC<PhysioPodDashboardPageProps> = ({ 
 
             {lastPolledAt && (
               <span style={{ fontSize: '11px', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>
-                Polled: {lastPolledAt.toLocaleTimeString()}
+                Last Synced: {lastPolledAt.toLocaleTimeString()}
               </span>
             )}
           </div>
